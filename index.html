@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-World Sandbox Prototype</title>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+    integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
+  <!-- Firebase App (the core Firebase SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <!-- Firebase Realtime Database -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+  <!-- Basic Styles -->
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #222; color: #eee; }
+    #map { width: 100%; height: 90%; }
+    #notif { padding: 5px; text-align: center; background: #444; }
+    #inventory { padding: 10px; background: #333; }
+    .btn { padding: 6px 12px; margin: 4px; background: #555; color: #eee; cursor: pointer; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <!-- Map Container -->
+  <div id="map"></div>
+  <!-- Notification Bar -->
+  <div id="notif">Notifications will appear here</div>
+  <!-- Inventory & Controls (for prototype demonstration) -->
+  <div id="inventory">
+    <strong>Inventory:</strong>
+    <span id="inventoryList">Empty</span>
+    <!-- For debugging/demo -->
+    <button id="clearInv" class="btn">Clear Inventory</button>
+  </div>
+
+  <!-- Main Script -->
+  <script>
+    /***********************
+     * Firebase Setup
+     ***********************/
+    // Replace the following config object with your Firebase project configuration
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Generate a unique user id for this session (in production, use auth)
+    const userId = "user_" + Math.random().toString(36).substr(2, 9);
+    console.log("User ID:", userId);
+
+    /***********************
+     * Global Variables
+     ***********************/
+    let playerMarker;  // Player's marker on the map
+    let currentPos = {lat: 40.7128, lng: -74.0060}; // default to New York City
+    let inventory = [];
+
+    // Dummy arrays for safe zones and buildings (normally sourced from OSM or custom queries)
+    const safeZones = [
+      {lat: 40.7138, lng: -74.0050, type: "Fire Station"},
+      {lat: 40.7120, lng: -74.0070, type: "Police Station"},
+      {lat: 40.7130, lng: -74.0045, type: "Church"},
+      {lat: 40.7115, lng: -74.0065, type: "Park"}
+    ];
+
+    const buildings = [
+      {lat: 40.7132, lng: -74.0065, name: "Building A"},
+      {lat: 40.7125, lng: -74.0055, name: "Building B"},
+      {lat: 40.7129, lng: -74.0072, name: "Building C"}
+    ];
+
+    /***********************
+     * Initialize Map with Leaflet
+     ***********************/
+    const map = L.map('map').setView([currentPos.lat, currentPos.lng], 16);
+
+    // Load OSM Tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Create player marker and add to map
+    function createPlayerMarker(lat, lng) {
+      if(playerMarker) map.removeLayer(playerMarker);
+      playerMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
+    }
+    createPlayerMarker(currentPos.lat, currentPos.lng);
+
+    // Save player's current position in Firebase
+    function updatePlayerPosition(lat, lng) {
+      currentPos = {lat, lng};
+      createPlayerMarker(lat, lng);
+      db.ref('players/' + userId).set({
+        location: currentPos,
+        inventory: inventory,
+        timestamp: Date.now()
+      });
+    }
+
+    // Allow user to set spawn point by clicking on a road (for prototype, any click moves player)
+    map.on('click', function(e) {
+      // In a full implementation, check if e.latlng is on a road using RHQC grid logic
+      updatePlayerPosition(e.latlng.lat, e.latlng.lng);
+      checkNearbySafeZones(e.latlng);
+      checkNearbyPlayers(e.latlng);
+    });
+
+    /***********************
+     * Safe Zones & Buildings
+     ***********************/
+    // Add safe zone markers
+    safeZones.forEach(zone => {
+      const icon = L.divIcon({
+        html: `<div style="background: #0a0; border-radius: 50%; width: 20px; height: 20px; text-align:center; line-height:20px; color:#fff;">${zone.type.charAt(0)}</div>`,
+        className: ''
+      });
+      L.marker([zone.lat, zone.lng], {icon: icon}).addTo(map).bindPopup(zone.type);
+    });
+
+    // Add building markers (lootable zones)
+    buildings.forEach(bldg => {
+      const marker = L.marker([bldg.lat, bldg.lng], {icon: L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png', // sample building icon
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      })}).addTo(map);
+      marker.bindPopup(bldg.name + "<br/><button onclick='lootBuilding(\"" + bldg.name + "\")'>Loot</button>");
+    });
+
+    // Function called when a building is looted
+    function lootBuilding(buildingName) {
+      // For demonstration, generate random loot (use weighted loot tables in full version)
+      const lootItems = ["Old Gun", "Ammo Box", "Medkit", "Rare Key", "Empty Bottle"];
+      const loot = lootItems[Math.floor(Math.random() * lootItems.length)];
+      inventory.push({building: buildingName, item: loot});
+      updateInventoryDisplay();
+      showNotification("Looted " + loot + " from " + buildingName);
+      // Update inventory in Firebase
+      db.ref('players/' + userId + '/inventory').set(inventory);
+    }
+
+    // Function to update the inventory display
+    function updateInventoryDisplay() {
+      document.getElementById("inventoryList").innerText = inventory.map(i => i.item).join(", ") || "Empty";
+    }
+
+    document.getElementById("clearInv").addEventListener("click", function(){
+      inventory = [];
+      updateInventoryDisplay();
+      db.ref('players/' + userId + '/inventory').set(inventory);
+    });
+
+    /***********************
+     * Zombie Spawns
+     ***********************/
+    // Function to spawn a zombie near the player
+    function spawnZombie() {
+      // Spawn a zombie within ~50 meters (0.0005 degrees approximately) of player
+      const latOffset = (Math.random() - 0.5) * 0.001;
+      const lngOffset = (Math.random() - 0.5) * 0.001;
+      const zombieLat = currentPos.lat + latOffset;
+      const zombieLng = currentPos.lng + lngOffset;
+      
+      const zombieMarker = L.marker([zombieLat, zombieLng], {icon: L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png', // simple zombie icon
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      })}).addTo(map);
+      zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(this, " + zombieLat + ", " + zombieLng + ")'>Attack</button>");
+      // Remove the zombie marker after 30 seconds if not defeated
+      setTimeout(() => { map.removeLayer(zombieMarker); }, 30000);
+    }
+
+    // Function to defeat a zombie and get loot
+    function defeatZombie(button, lat, lng) {
+      // Remove the zombie marker (traverse DOM to get marker if needed; for now, assume popup closes)
+      map.closePopup();
+      // Grant player random loot from zombie
+      const zombieLoot = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
+      const loot = zombieLoot[Math.floor(Math.random() * zombieLoot.length)];
+      inventory.push({source: "Zombie", item: loot});
+      updateInventoryDisplay();
+      showNotification("Defeated zombie and looted: " + loot);
+    }
+
+    // Spawn a zombie every 30 seconds (if player is moving or present)
+    setInterval(spawnZombie, 30000);
+
+    /***********************
+     * Player Proximity & Notifications
+     ***********************/
+    // Check for safe zone proximity (within ~30 meters)
+    function checkNearbySafeZones(latlng) {
+      safeZones.forEach(zone => {
+        let dist = map.distance(latlng, L.latLng(zone.lat, zone.lng));
+        if (dist < 30) {
+          showNotification("You are within a safe zone (" + zone.type + "). You can rest and trade here.");
+        }
+      });
+    }
+
+    // Check for other players on the same road (simulation: within 50 meters)
+    function checkNearbyPlayers(latlng) {
+      // Query Firebase for players (excluding self) whose location is within a certain distance.
+      db.ref('players').once('value', snapshot => {
+        let playersFound = [];
+        snapshot.forEach(childSnap => {
+          const p = childSnap.val();
+          if(childSnap.key !== userId && p.location) {
+            let dist = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
+            if(dist < 50) playersFound.push(childSnap.key);
+          }
+        });
+        if(playersFound.length > 0) {
+          showNotification("Players nearby: " + playersFound.join(", "));
+        }
+      });
+    }
+
+    // General notification display
+    function showNotification(message) {
+      const notifDiv = document.getElementById("notif");
+      notifDiv.innerText = message;
+      // Clear notification after 5 seconds
+      setTimeout(() => { notifDiv.innerText = ""; }, 5000);
+    }
+
+    /***********************
+     * RHQC System & Road Logic Placeholder
+     ***********************/
+    // PLACE BLOCK HERE: 
+    // Here you would implement your RHQC quadrant logic:
+    // - Compute the grid based on current position
+    // - Determine the “road” segment (via an algorithm or using OSM road data)
+    // - Flag buildings within specific grid cells for special loot
+    // - Guide players using notifications based on their RHQC code
+    // For the prototype, we simulate these events with simple distance checks.
+
+    /***********************
+     * Firebase Player Sync (Live Updates)
+     ***********************/
+    // Listen for changes in player data to update proximity alerts continuously.
+    db.ref('players').on('value', snapshot => {
+      // Whenever any player updates, check if someone is on the same road.
+      // (This example uses distance checks from current position.)
+      snapshot.forEach(childSnap => {
+        const p = childSnap.val();
+        if(childSnap.key !== userId && p.location) {
+          let dist = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
+          if(dist < 50) {
+            showNotification("Player " + childSnap.key + " is close by on your road!");
+          }
+        }
+      });
+    });
+
+  </script>
+</body>
+</html>

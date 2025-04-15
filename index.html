@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Real-World Sandbox Prototype</title>
+  <title>Gridwalkers Sandbox Prototype</title>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
     integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
@@ -27,11 +27,10 @@
   <div id="map"></div>
   <!-- Notification Bar -->
   <div id="notif">Notifications will appear here</div>
-  <!-- Inventory & Controls (for prototype demonstration) -->
+  <!-- Inventory & Controls -->
   <div id="inventory">
     <strong>Inventory:</strong>
     <span id="inventoryList">Empty</span>
-    <!-- For debugging/demo -->
     <button id="clearInv" class="btn">Clear Inventory</button>
   </div>
 
@@ -40,21 +39,20 @@
     /***********************
      * Firebase Setup
      ***********************/
-    // Replace the following config object with your Firebase project configuration
+    // Firebase project configuration for Gridwalkers (updated)
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyDGaaEqlkNdlfBpDSDojctIOrhgwMchw6M",
+      authDomain: "gridwalkers-f084e.firebaseapp.com",
+      projectId: "gridwalkers-f084e",
+      storageBucket: "gridwalkers-f084e.firebasestorage.app",
+      messagingSenderId: "924068197891",
+      appId: "1:924068197891:web:3dbb3dfbd07ce01f618036"
     };
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Generate a unique user id for this session (in production, use auth)
+    // Generate a unique user id for this session
     const userId = "user_" + Math.random().toString(36).substr(2, 9);
     console.log("User ID:", userId);
 
@@ -65,7 +63,7 @@
     let currentPos = {lat: 40.7128, lng: -74.0060}; // default to New York City
     let inventory = [];
 
-    // Dummy arrays for safe zones and buildings (normally sourced from OSM or custom queries)
+    // Dummy arrays for safe zones and buildings (in a full implementation, these come from OSM or custom queries)
     const safeZones = [
       {lat: 40.7138, lng: -74.0050, type: "Fire Station"},
       {lat: 40.7120, lng: -74.0070, type: "Police Station"},
@@ -83,15 +81,13 @@
      * Initialize Map with Leaflet
      ***********************/
     const map = L.map('map').setView([currentPos.lat, currentPos.lng], 16);
-
-    // Load OSM Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
     // Create player marker and add to map
     function createPlayerMarker(lat, lng) {
-      if(playerMarker) map.removeLayer(playerMarker);
+      if (playerMarker) map.removeLayer(playerMarker);
       playerMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
     }
     createPlayerMarker(currentPos.lat, currentPos.lng);
@@ -107,9 +103,8 @@
       });
     }
 
-    // Allow user to set spawn point by clicking on a road (for prototype, any click moves player)
+    // Allow user to set spawn point by clicking on the map (for this prototype, any click moves player)
     map.on('click', function(e) {
-      // In a full implementation, check if e.latlng is on a road using RHQC grid logic
       updatePlayerPosition(e.latlng.lat, e.latlng.lng);
       checkNearbySafeZones(e.latlng);
       checkNearbyPlayers(e.latlng);
@@ -130,7 +125,7 @@
     // Add building markers (lootable zones)
     buildings.forEach(bldg => {
       const marker = L.marker([bldg.lat, bldg.lng], {icon: L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png', // sample building icon
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       })}).addTo(map);
@@ -139,13 +134,11 @@
 
     // Function called when a building is looted
     function lootBuilding(buildingName) {
-      // For demonstration, generate random loot (use weighted loot tables in full version)
       const lootItems = ["Old Gun", "Ammo Box", "Medkit", "Rare Key", "Empty Bottle"];
       const loot = lootItems[Math.floor(Math.random() * lootItems.length)];
       inventory.push({building: buildingName, item: loot});
       updateInventoryDisplay();
       showNotification("Looted " + loot + " from " + buildingName);
-      // Update inventory in Firebase
       db.ref('players/' + userId + '/inventory').set(inventory);
     }
 
@@ -165,27 +158,23 @@
      ***********************/
     // Function to spawn a zombie near the player
     function spawnZombie() {
-      // Spawn a zombie within ~50 meters (0.0005 degrees approximately) of player
       const latOffset = (Math.random() - 0.5) * 0.001;
       const lngOffset = (Math.random() - 0.5) * 0.001;
       const zombieLat = currentPos.lat + latOffset;
       const zombieLng = currentPos.lng + lngOffset;
       
       const zombieMarker = L.marker([zombieLat, zombieLng], {icon: L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png', // simple zombie icon
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       })}).addTo(map);
       zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(this, " + zombieLat + ", " + zombieLng + ")'>Attack</button>");
-      // Remove the zombie marker after 30 seconds if not defeated
       setTimeout(() => { map.removeLayer(zombieMarker); }, 30000);
     }
 
-    // Function to defeat a zombie and get loot
+    // Function to defeat a zombie and receive loot
     function defeatZombie(button, lat, lng) {
-      // Remove the zombie marker (traverse DOM to get marker if needed; for now, assume popup closes)
       map.closePopup();
-      // Grant player random loot from zombie
       const zombieLoot = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
       const loot = zombieLoot[Math.floor(Math.random() * zombieLoot.length)];
       inventory.push({source: "Zombie", item: loot});
@@ -193,7 +182,7 @@
       showNotification("Defeated zombie and looted: " + loot);
     }
 
-    // Spawn a zombie every 30 seconds (if player is moving or present)
+    // Spawn a zombie every 30 seconds
     setInterval(spawnZombie, 30000);
 
     /***********************
@@ -211,7 +200,6 @@
 
     // Check for other players on the same road (simulation: within 50 meters)
     function checkNearbyPlayers(latlng) {
-      // Query Firebase for players (excluding self) whose location is within a certain distance.
       db.ref('players').once('value', snapshot => {
         let playersFound = [];
         snapshot.forEach(childSnap => {
@@ -231,28 +219,18 @@
     function showNotification(message) {
       const notifDiv = document.getElementById("notif");
       notifDiv.innerText = message;
-      // Clear notification after 5 seconds
       setTimeout(() => { notifDiv.innerText = ""; }, 5000);
     }
 
     /***********************
      * RHQC System & Road Logic Placeholder
      ***********************/
-    // PLACE BLOCK HERE: 
-    // Here you would implement your RHQC quadrant logic:
-    // - Compute the grid based on current position
-    // - Determine the “road” segment (via an algorithm or using OSM road data)
-    // - Flag buildings within specific grid cells for special loot
-    // - Guide players using notifications based on their RHQC code
-    // For the prototype, we simulate these events with simple distance checks.
+    // PLACE BLOCK HERE: Implement your RHQC quadrant logic
 
     /***********************
      * Firebase Player Sync (Live Updates)
      ***********************/
-    // Listen for changes in player data to update proximity alerts continuously.
     db.ref('players').on('value', snapshot => {
-      // Whenever any player updates, check if someone is on the same road.
-      // (This example uses distance checks from current position.)
       snapshot.forEach(childSnap => {
         const p = childSnap.val();
         if(childSnap.key !== userId && p.location) {
@@ -263,7 +241,6 @@
         }
       });
     });
-
   </script>
 </body>
 </html>

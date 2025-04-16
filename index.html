@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gridwalkers – Phase 3: Zombie Spawning</title>
+  <title>Gridwalkers – Phase 4: Zombie AI & Spawning</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Leaflet and Draw CSS -->
@@ -93,7 +93,21 @@
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
-    /* Movement Radius Indicator (50 m) */
+    /* Zombie Sprite: 3 stacked squares (green, brown, green) */
+    .zombie-sprite {
+      display: inline-block;
+    }
+    .zombie-sprite > div {
+      width: 6px;
+      height: 6px;
+      margin: 0;
+      padding: 0;
+    }
+    .zombie-head { background: green; }
+    .zombie-torso { background: brown; }
+    .zombie-boots { background: green; }
+    
+    /* Movement Radius Indicator (50 m for player) */
     .move-radius {
       fill: rgba(0, 0, 255, 0.1);
       stroke: blue;
@@ -102,7 +116,7 @@
   </style>
 </head>
 <body>
-  <!-- Top Control Bar: Search to spawn the player -->
+  <!-- Top Control Bar: Search for player spawn -->
   <div id="searchBar">
     <input type="text" id="addressInput" placeholder="Enter your address" size="20" />
     <button id="searchBtn">Search</button>
@@ -111,7 +125,7 @@
   <!-- Map Container -->
   <div id="map"></div>
 
-  <!-- Road List Panel (for debugging display) -->
+  <!-- Road List Panel (for debugging fast-travel, if needed) -->
   <div id="roadList">
     <h3>
       Road List
@@ -166,9 +180,9 @@
      ***********************/
     var playerMarker = null;
     var spawnPoint = null;
-    var moveIndicator = null; // Visual circle showing allowed move distance
+    var moveIndicator = null; // Visual circle (50 m radius)
 
-    // Create a custom HTML for the player: 3 stacked squares
+    // Create a custom HTML for the player: 3 stacked squares.
     function createPlayerHTML() {
       return '<div class="player-sprite">' +
                '<div class="player-head"></div>' +
@@ -192,7 +206,7 @@
       updateMoveIndicator();
     }
 
-    // Draw or update a circle around the player for visual feedback (50 m radius)
+    // Draw or update a circle around the player (50 m radius) for visual feedback.
     function updateMoveIndicator() {
       if (moveIndicator) map.removeLayer(moveIndicator);
       if (!playerMarker) return;
@@ -226,7 +240,7 @@
     /***********************
      * FETCH ROADS WITH GEOMETRY (Overpass API)
      ***********************/
-    var roadPolylines = []; // For future fast travel or debugging
+    var roadPolylines = []; // For future debugging or fast-travel
     function fetchAndDisplayRoads() {
       if (!gridBox) {
         document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
@@ -254,7 +268,7 @@
 
     function processRoadData(elements, gridBounds) {
       var roads = [];
-      roadPolylines = []; // Reset the array
+      roadPolylines = []; // Reset
       elements.forEach(function(elem) {
         if (elem.type === "way" && elem.tags && elem.tags.name && elem.geometry) {
           var polyCoords = elem.geometry.map(pt => [pt.lat, pt.lon]);
@@ -291,7 +305,7 @@
     });
 
     /***********************
-     * HELPER FUNCTIONS (Distance & Bearing)
+     * HELPER FUNCTIONS (Distance, Bearing, Destination)
      ***********************/
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
@@ -308,7 +322,21 @@
       return R * c;
     }
 
-    // RHQC Code calculation remains unchanged.
+    // Given a starting point, bearing (degrees), and distance (meters), compute destination.
+    function destinationPoint(lat, lon, bearing, distance) {
+      var R = 6371000;
+      var δ = distance / R;
+      var θ = toRad(bearing);
+      var φ1 = toRad(lat);
+      var λ1 = toRad(lon);
+      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) +
+                         Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
+                               Math.cos(δ) - Math.sin(φ1)*Math.sin(φ2));
+      return { lat: toDeg(φ2), lng: toDeg(λ2) };
+    }
+
+    // RHQC Code remains unchanged.
     function getRHQCCode(lat, lng, bounds, maxLevel) {
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
@@ -336,13 +364,12 @@
     /***********************
      * CLICK-TO-MOVE: FREE PLAYER MOVEMENT
      ***********************/
-    // Instead of snapping to roads, clicking anywhere makes the player slowly move toward that point.
     map.on('click', function(e) {
       if (!playerMarker) return;
       animatePlayerMove(e.latlng.lat, e.latlng.lng);
     });
 
-    // Animate player movement with smooth transition.
+    // Animate player's movement similar to before.
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
@@ -358,9 +385,7 @@
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         playerMarker.setLatLng([newLat, newLng]);
         updateMoveIndicator();
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        }
+        if (progress < 1) requestAnimationFrame(animate);
       }
       requestAnimationFrame(animate);
       map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
@@ -369,30 +394,93 @@
     map.on('moveend', updateMoveIndicator);
 
     /***********************
-     * PHASE 3: ZOMBIE SPAWNING
+     * PHASE 4: ZOMBIE SPAWNING & AI
      ***********************/
-    // Create a new layer to hold zombies.
+    // Create a new layer for zombies.
     var zombieLayer = L.layerGroup().addTo(map);
+    var zombieMarkers = []; // Array of zombie objects: { marker }
 
-    // Function to spawn a zombie marker at a random location.
+    // Create custom HTML for a zombie: 3 stacked squares (green, brown, green)
+    function createZombieHTML() {
+      return '<div class="zombie-sprite">' +
+               '<div class="zombie-head"></div>' +
+               '<div class="zombie-torso"></div>' +
+               '<div class="zombie-boots"></div>' +
+             '</div>';
+    }
+
+    // Spawn a zombie at a random location within 100m radius of the player.
     function spawnZombie() {
-      var bounds = gridBox ? gridBox.getBounds() : map.getBounds();
-      var south = bounds.getSouth(), north = bounds.getNorth();
-      var west = bounds.getWest(), east = bounds.getEast();
-      var lat = south + Math.random() * (north - south);
-      var lng = west + Math.random() * (east - west);
-      // Create a simple zombie icon: a small red square with a skull symbol.
+      if (!playerMarker) return;
+      var playerPos = playerMarker.getLatLng();
+      var r = Math.random() * 100; // 0 to 100 m
+      var angle = Math.random() * 360;
+      var spawn = destinationPoint(playerPos.lat, playerPos.lng, angle, r);
       var zombieIcon = L.divIcon({
-        html: '<div style="width:8px; height:8px; background:red; color:white; font-size:10px; text-align:center;">&#9760;</div>',
-        iconSize: [8, 8],
+        html: createZombieHTML(),
+        iconSize: [6, 18],
         className: ''
       });
-      var zombieMarker = L.marker([lat, lng], { icon: zombieIcon });
-      zombieMarker.addTo(zombieLayer).bindPopup("Zombie!");
+      var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
+      marker.addTo(zombieLayer).bindPopup("Zombie!");
+      zombieMarkers.push({ marker: marker });
+    }
+
+    // Update zombie behavior every second.
+    function updateZombies() {
+      if (!playerMarker) return;
+      var playerPos = playerMarker.getLatLng();
+      // Loop through zombies in reverse order in case we remove some.
+      for (var i = zombieMarkers.length - 1; i >= 0; i--) {
+        var zObj = zombieMarkers[i];
+        var zombiePos = zObj.marker.getLatLng();
+        var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
+        // Remove zombie if more than 150 m from the player.
+        if (dist > 150) {
+          zombieLayer.removeLayer(zObj.marker);
+          zombieMarkers.splice(i, 1);
+          continue;
+        }
+        var target = null;
+        var speed = 0;
+        if (dist < 10) {
+          // If within 10 m, lock on and chase player.
+          target = { lat: playerPos.lat, lng: playerPos.lng };
+          speed = 18; // chase speed (slightly slower than player)
+        } else {
+          // Otherwise, wander: move a small random step (up to 5m)
+          var wanderDist = Math.random() * 5;
+          var wanderAngle = Math.random() * 360;
+          target = destinationPoint(zombiePos.lat, zombiePos.lng, wanderAngle, wanderDist);
+          speed = 10; // wander speed
+        }
+        animateZombieMove(zObj.marker, target.lat, target.lng, speed);
+      }
+    }
+
+    // Animate zombie marker movement.
+    function animateZombieMove(marker, targetLat, targetLng, speed) {
+      var startPos = marker.getLatLng();
+      var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
+      var duration = (totalDistance / speed) * 1000;
+      if (duration < 500) duration = 500;
+      var startTime = null;
+      function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = (timestamp - startTime) / duration;
+        if (progress > 1) progress = 1;
+        var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
+        var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
+        marker.setLatLng([newLat, newLng]);
+        if (progress < 1) requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
     }
 
     // Spawn a zombie every 15 seconds.
     setInterval(spawnZombie, 15000);
+    // Update zombie behavior every second.
+    setInterval(updateZombies, 1000);
   </script>
 </body>
 </html>

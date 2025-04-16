@@ -1,19 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gridwalkers Game Masterpiece</title>
+  <title>Gridwalkers – RHQC Game Prototype</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" 
-        integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <!-- Leaflet Draw CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
-    /* --- RHQC System & Base Map Styles --- */
-    body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; }
-    #map { position: absolute; top: 60px; bottom: 0; left: 0; right: 0; }
-    /* Top control bar for RHQC system */
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
+    /* Top control bar */
     #searchBar {
       position: absolute;
       top: 5px;
@@ -22,10 +20,12 @@
       background: rgba(255,255,255,0.9);
       padding: 6px;
       border-radius: 4px;
+    }
+    #searchBar button, #searchBar input {
+      margin: 2px;
       font-size: 12px;
     }
-    #searchBar button, #searchBar input { margin: 2px; }
-    /* Edit Mode Controls */
+    /* Edit Mode Controls – hidden by default */
     #editControls {
       position: absolute;
       top: 5px;
@@ -35,33 +35,64 @@
       padding: 6px;
       border-radius: 4px;
       display: none;
+    }
+    #editControls button {
+      margin: 2px;
       font-size: 12px;
     }
-    /* Road List Panel */
+    /* Road list panel */
     #roadList {
       position: absolute;
       top: 60px;
-      right: 0;
+      left: 10px;
       width: 300px;
-      max-height: calc(100% - 60px);
+      max-height: 300px;
       overflow-y: auto;
       background: rgba(255,255,255,0.95);
-      z-index: 1400;
-      padding: 10px;
-      font-size: 14px;
+      z-index: 1500;
+      padding: 5px;
+      box-shadow: 0px 0px 8px rgba(0,0,0,0.5);
     }
-    #roadList h3 { margin: 0; display: flex; justify-content: space-between; align-items: center; }
-    #roadList h3 button { font-size: 12px; padding: 2px 4px; cursor: pointer; }
-    #roadFilter { width: 100%; padding: 4px; box-sizing: border-box; font-size: 13px; margin: 5px 0; }
-    .road-item { padding: 5px; border-bottom: 1px solid #ccc; cursor: pointer; }
-    .road-item:hover { background: #eee; }
-    .road-code { font-weight: bold; color: #333; background: #f0f0f0; padding: 2px 4px; border-radius: 3px; margin-right: 5px; }
-    .road-info { font-size: 11px; color: #555; margin-top: 2px; }
-    .user-direction { color: blue; font-size: 12px; margin-left: 5px; }
+    #roadList h2 {
+      margin: 0;
+      font-size: 16px;
+      text-align: center;
+    }
+    .road-entry {
+      font-size: 14px;
+      border-bottom: 1px solid #ccc;
+      padding: 3px;
+      cursor: pointer;
+    }
+    .road-entry:hover {
+      background: #eee;
+    }
+    /* Road list filter input */
+    #roadFilter {
+      width: 100%;
+      margin: 5px 0;
+      padding: 4px;
+      box-sizing: border-box;
+      font-size: 13px;
+    }
+    /* HUD for chat, inventory, etc. (future expansion) */
+    #hud {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 150px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 10px;
+      box-sizing: border-box;
+      z-index: 1000;
+    }
+    /* Road list toggle button (when minimized) */
     #roadListToggle {
       position: absolute;
       top: 60px;
-      right: 0;
+      left: 10px;
       z-index: 1500;
       display: none;
       background: rgba(255,255,255,0.9);
@@ -70,31 +101,28 @@
       cursor: pointer;
       font-size: 14px;
     }
-    #measureDisplay { position: absolute; bottom: 0; left: 0; background: rgba(255,255,255,0.9); padding: 5px 10px; font-size: 14px; z-index: 1500; }
-    
-    /* --- Game HUD Overlay Styles --- */
-    #gameHUD {
+    /* Measurement display */
+    #measureDisplay {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 20%;
-      background: rgba(0,0,0,0.8);
-      color: #fff;
-      padding: 10px;
-      box-sizing: border-box;
+      bottom: 160px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
       font-size: 14px;
-      overflow-y: auto;
-      z-index: 2000;
+      display: none;
     }
-    #gameHUD div { margin-bottom: 5px; }
-    #gameHUD input { width: 70%; padding: 4px; }
-    #gameHUD button { padding: 4px 8px; margin-left: 5px; }
-    #gameChat { max-height: 50px; overflow-y: auto; font-size: 12px; background: #222; padding: 5px; }
+    /* Tiny blue arrow for user direction */
+    .user-direction {
+      color: blue;
+      font-size: 12px;
+      margin-left: 5px;
+    }
   </style>
 </head>
 <body>
-  <!-- RHQC System Top Control Bar -->
+  <!-- Top Control Bar -->
   <div id="searchBar">
       <input type="text" id="addressInput" placeholder="Enter your address" size="20" />
       <button id="searchBtn">Search</button>
@@ -102,8 +130,9 @@
       <button id="setMyLocationBtn">Set My Location</button>
       <button id="measureBtn">Measure</button>
       <button id="editPageBtn">Edit Page</button>
+      <!-- (Optional: Symbol search button could go here) -->
   </div>
-  <!-- RHQC System Edit Controls -->
+  <!-- Edit Mode Controls -->
   <div id="editControls">
       <button id="addStationBtn">Add Station</button>
       <button id="addCustomBtn">Add Custom Symbol</button>
@@ -112,47 +141,28 @@
       <button id="saveChangesBtn">Save Changes</button>
       <button id="cancelEditBtn">Cancel Edit</button>
   </div>
-  <!-- Map Container -->
-  <div id="map"></div>
-  <!-- RHQC System Road List Panel -->
+  <!-- Road List Panel -->
   <div id="roadList">
-      <h3>
-          Road List
-          <button id="toggleRoadListBtn">Close</button>
-      </h3>
+      <h2>Road List</h2>
       <input type="text" id="roadFilter" placeholder="Filter roads..." />
-      <div id="roadsContainer">No roads loaded.</div>
+      <div id="roadListContent">Loading roads...</div>
   </div>
   <div id="roadListToggle">Show Road List</div>
   <!-- Measurement Display -->
   <div id="measureDisplay">Total: 0 ft</div>
-  <!-- Game HUD Overlay -->
-  <div id="gameHUD">
-    <div><strong>Gridwalkers Game HUD</strong> (<span id="gameUserId"></span>)</div>
-    <div id="gameNotif">No notifications.</div>
-    <div>
-      <strong>Inventory:</strong> <span id="gameInventory">Empty</span>
-      <button id="clearGameInv">Clear</button>
-    </div>
-    <div>
-      <input type="text" id="gameChatInput" placeholder="Type a message..." />
-      <button id="sendGameChat">Send</button>
-    </div>
-    <div id="gameChat">Game chat messages appear here.</div>
-  </div>
+  <!-- Map Container -->
+  <div id="map"></div>
 
-  <!-- Load Leaflet and Draw Libraries -->
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" 
-          integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
+  <!-- Leaflet and Draw Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-  
-  <!-- **************** RHQC System Code **************** -->
   <script>
     /***********************
-     * GLOBAL VARIABLES & INITIAL SETUP (RHQC System)
+     * GLOBAL VARIABLES & INITIAL SETUP
      ***********************/
-    var isEditing = false, deleteMarkerMode = false;
-    var map = L.map('map').setView([36.85, -87.55], 13);
+    var isEditing = false;
+    var deleteMarkerMode = false;
+    var map = L.map('map').setView([36.85, -87.55], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors'
@@ -179,36 +189,39 @@
         layer.setStyle({ opacity: 0, fillOpacity: 0 });
         gridBox = layer;
         fetchAndDisplayRoads();
-    });
+      });
     map.on('draw:edited', function(e) {
         gridBox = drawnItems.getLayers()[0];
         fetchAndDisplayRoads();
     });
 
     /***********************
-     * CURRENT LOCATION & TEMPORARY "MY LOCATION" DOT (RHQC)
+     * CURRENT LOCATION & TEMPORARY "MY LOCATION" DOT
      ***********************/
-    var currentLocationMarker = null, currentRouteLine = null;
+    var currentLocationMarker = null;
+    var currentRouteLine = null;
     document.getElementById("currentLocationBtn").addEventListener("click", function(){
         navigator.geolocation.getCurrentPosition(function(position){
             var lat = position.coords.latitude, lon = position.coords.longitude;
             if (!currentLocationMarker) {
                 currentLocationMarker = L.circleMarker([lat, lon], { radius: 8, color: "#0000FF", fillColor: "#0000FF", fillOpacity: 1 })
-                                      .addTo(map).bindPopup("Your current location");
+                    .addTo(map).bindPopup("Your current location");
             } else {
                 currentLocationMarker.setLatLng([lat, lon]);
             }
             map.setView([lat, lon], 16);
             currentLocationMarker.openPopup();
-        }, function(error){ alert("Location access denied or unavailable."); }, { enableHighAccuracy: true });
+        }, function(error){
+            alert("Location access denied or unavailable.");
+        }, { enableHighAccuracy: true });
     });
     document.getElementById("setMyLocationBtn").addEventListener("click", function(){
         alert("Click on the map to set a temporary 'My Location' marker.");
-        map.once('click', function(e){
+        map.once('click', function(e) {
             var lat = e.latlng.lat, lon = e.latlng.lng;
             if (currentLocationMarker) { map.removeLayer(currentLocationMarker); }
             currentLocationMarker = L.circleMarker([lat, lon], { radius: 8, color: "#0000FF", fillColor: "#0000FF", fillOpacity: 1 })
-                                      .addTo(map).bindPopup("My Location (set manually)").openPopup();
+                .addTo(map).bindPopup("My Location (set manually)").openPopup();
         });
     });
     if ("geolocation" in navigator) {
@@ -219,29 +232,45 @@
     }
 
     /***********************
-     * STATIC FIRE STATION DATA (RHQC)
+     * STATIC FIRE STATION DATA
      ***********************/
+    // Start with an empty array; user adds stations via edit mode.
     var fireStations = [];
     var markerLayerGroup = L.layerGroup().addTo(map);
     function updateStationMarkers() {
         markerLayerGroup.clearLayers();
         fireStations.forEach(function(station, index) {
-            var redSquareIcon = L.divIcon({
-                html: '<div style="width:16px;height:16px;background:red;border:2px solid darkred;"></div>',
-                iconSize: [20,20],
-                className: ''
-            });
-            var marker = L.marker([station.lat, station.lon], { icon: redSquareIcon })
-                          .addTo(markerLayerGroup)
-                          .bindPopup(station.name);
-            station._leafletId = marker._leafletId;
-            marker.on('click', function(e) {
+            var icon;
+            if (station.type === "fireStation") {
+                icon = L.divIcon({
+                    html: '<div style="width:16px;height:16px;background:red;border:2px solid darkred;"></div>',
+                    iconSize: [20,20],
+                    className: ''
+                });
+            } else if (station.type === "customSymbol") {
+                icon = L.divIcon({
+                    html: '<div style="width:16px;height:16px;background:blue;border:2px solid navy;border-radius:50%;"></div>',
+                    iconSize: [20,20],
+                    className: ''
+                });
+            } else if (station.type === "noteMarker") {
+                icon = L.divIcon({
+                    html: '<div style="width:16px;height:16px;background:yellow;border:2px solid gold;"></div>',
+                    iconSize: [20,20],
+                    className: ''
+                });
+            }
+            var m = L.marker([station.lat, station.lon], { icon: icon })
+                     .addTo(markerLayerGroup)
+                     .bindPopup("<b>" + station.name + "</b><br>" + (station.note || ""));
+            station._leafletId = m._leafletId;
+            m.on('click', function(e) {
                 if (isEditing && deleteMarkerMode) {
-                    if (confirm("Delete station: " + station.name + "?")) {
+                    if (confirm("Delete marker: " + station.name + "?")) {
                         fireStations.splice(index, 1);
                         updateStationMarkers();
                         saveMarkersToStorage();
-                        alert("Station deleted.");
+                        alert("Marker deleted.");
                     }
                 }
             });
@@ -249,31 +278,42 @@
     }
     updateStationMarkers();
 
+    /***********************
+     * SAVED MARKERS STORAGE
+     ***********************/
     function saveMarkersToStorage() {
         localStorage.setItem("fireStations", JSON.stringify(fireStations));
     }
     function loadMarkersFromStorage() {
         var data = localStorage.getItem("fireStations");
         if (data) {
-            try { fireStations = JSON.parse(data); } catch (e) { fireStations = []; }
+            try { fireStations = JSON.parse(data); }
+            catch (e) { fireStations = []; }
         }
         updateStationMarkers();
     }
     loadMarkersFromStorage();
+
+    /***********************
+     * EDIT MODE CONTROLS (Password-Protected)
+     ***********************/
     document.getElementById("editPageBtn").addEventListener("click", function(){
         var pwd = prompt("Enter password:");
         if (pwd === "Password911") {
             isEditing = true;
             document.getElementById("editControls").style.display = "block";
-            alert("Edit mode activated. Use the controls to add or delete markers.");
-        } else { alert("Incorrect password."); }
+            alert("Edit mode activated. You can now add or delete markers.");
+        } else {
+            alert("Incorrect password.");
+        }
     });
     document.getElementById("addStationBtn").addEventListener("click", function(){
         if (!isEditing) return;
         alert("Click on the map to add a new fire station.");
         map.once('click', function(e){
             var lat = e.latlng.lat, lon = e.latlng.lng;
-            var name = prompt("Enter fire station name:", "New Station") || "New Station";
+            var name = prompt("Enter fire station name:", "New Station");
+            if (!name) { name = "New Station"; }
             fireStations.push({ type: "fireStation", lat: lat, lon: lon, name: name });
             updateStationMarkers();
             saveMarkersToStorage();
@@ -343,12 +383,12 @@
         var bbox = south + "," + west + "," + north + "," + east;
         var query = `[out:json][timeout:25];
 (
-  way["highway"="primary"](${bbox});
+          way["highway"="primary"](${bbox});
 );
 out center;`;
         fetch("https://overpass-api.de/api/interpreter", {
-            method: "POST",
-            body: "data=" + encodeURIComponent(query)
+            method:"POST",
+            body:"data=" + encodeURIComponent(query)
         })
         .then(function(response){ return response.json(); })
         .then(function(data) {
@@ -391,7 +431,7 @@ out center;`;
     fetchEmergencyCalls();
 
     /***********************
-     * HELPER FUNCTIONS (RHQC)
+     * HELPER FUNCTIONS
      ***********************/
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
@@ -404,8 +444,8 @@ out center;`;
     }
     function getBearing(lat1, lon1, lat2, lon2) {
         var dLon = toRad(lon2 - lon1);
-        var y = Math.sin(dLon)*Math.cos(toRad(lat2));
-        var x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
+        var y = Math.sin(dLon) * Math.cos(toRad(lat2));
+        var x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
         var brng = Math.atan2(y, x);
         return (toDeg(brng) + 360) % 360;
     }
@@ -461,7 +501,7 @@ out center;`;
     }
 
     /***********************
-     * FETCH & DISPLAY ROADS (Overpass)
+     * FETCH & DISPLAY ROADS (Using Overpass Query)
      ***********************/
     function fetchAndDisplayRoads() {
         if (!gridBox) {
@@ -472,11 +512,14 @@ out center;`;
         var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
         var bbox = south + "," + west + "," + north + "," + east;
         var query = `[out:json][timeout:25];
-(
-  way["highway"](${bbox});
-);
-out center;`;
-        fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:"data=" + encodeURIComponent(query) })
+        (
+            way["highway"](${bbox});
+        );
+        out center;`;
+        fetch("https://overpass-api.de/api/interpreter", {
+            method:"POST",
+            body:"data=" + encodeURIComponent(query)
+        })
         .then(function(response){ return response.json(); })
         .then(function(data){ processRoadData(data.elements, bounds); })
         .catch(function(error){
@@ -484,7 +527,7 @@ out center;`;
             document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
         });
     }
-    function processRoadData(elements, gridBounds) {
+    function processRoadData(elements, bounds) {
         var roads = [];
         elements.forEach(function(elem) {
             if (elem.type === "way" && elem.tags && elem.tags.name && elem.center) {
@@ -492,12 +535,13 @@ out center;`;
             }
         });
         var uniqueRoads = {};
-        roads.forEach(function(road) { uniqueRoads[road.name] = road; });
+        roads.forEach(function(r) { uniqueRoads[r.name] = r; });
         roads = Object.values(uniqueRoads);
-        roads.sort(function(a, b) { return a.name.localeCompare(b.name); });
+        roads.sort(function(a,b){ return a.name.localeCompare(b.name); });
         var html = "";
         roads.forEach(function(road) {
-            var code = getRHQCCode(road.lat, road.lon, [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
+            var code = getRHQCCode(road.lat, road.lon, [[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]], 5);
+            // Find nearest fire station marker from fireStations array.
             var nearestStation = null, minDist = Infinity;
             fireStations.forEach(function(station) {
                 var d = getDistanceMiles(road.lat, road.lon, station.lat, station.lon);
@@ -512,13 +556,13 @@ out center;`;
             html += "<div class='road-info'>Fire Station: " + stationInfo + "</div>";
             html += "</div>";
         });
-        if(html==="") html = "No roads found.";
+        if (html === "") html = "No roads found.";
         document.getElementById("roadsContainer").innerHTML = html;
         applyRoadFilter();
     }
 
     /***********************
-     * ROAD LIST PANEL & FILTERING
+     * ROAD LIST FILTERING & PANEL TOGGLING
      ***********************/
     document.getElementById("roadFilter").addEventListener("input", applyRoadFilter);
     function applyRoadFilter() {
@@ -542,7 +586,7 @@ out center;`;
     });
 
     /***********************
-     * ROUTE DRAWING (Direct from Nearest Fire Station)
+     * ROUTE DRAWING (From Nearest Fire Station to Selected Road)
      ***********************/
     function zoomToRoad(lat, lon) {
         map.setView([lat, lon], 18);
@@ -580,156 +624,76 @@ out center;`;
                 } else { alert("Address not found!"); }
             });
     });
-  </script>
-  
-  <!-- **************** Game Module Integration **************** -->
-  <script type="module">
-    // Import Firebase modules
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
-    
-    // Firebase configuration for Gridwalkers game
-    const firebaseConfig = {
-      apiKey: "AIzaSyDGaaEqlkNdlfBpDSDojctIOrhgwMchw6M",
-      authDomain: "gridwalkers-f084e.firebaseapp.com",
-      databaseURL: "https://gridwalkers-f084e-default-rtdb.firebaseio.com",
-      projectId: "gridwalkers-f084e",
-      storageBucket: "gridwalkers-f084e.appspot.com",
-      messagingSenderId: "924068197891",
-      appId: "1:924068197891:web:3dbb3dfbd07ce01f618036"
-    };
-    const appGame = initializeApp(firebaseConfig, "GameApp");
-    const dbGame = getDatabase(appGame);
-    
-    // Use a separate user id namespace for game-specific functionality
-    const gameUserId = "gameUser_" + Math.random().toString(36).substr(2, 9);
-    console.log("Game User ID:", gameUserId);
-    document.getElementById("gameUserId").innerText = gameUserId;
-    
-    // Game state variables
-    let gamePlayerMarker = null;
-    let gameCurrentPos = { lat: 40.7128, lng: -74.0060 };
-    let gameInventory = [];
-    
-    // Create a game player marker (using a distinct icon)
-    function createGamePlayerMarker(lat, lng) {
-      if (gamePlayerMarker) { map.removeLayer(gamePlayerMarker); }
-      gamePlayerMarker = L.marker([lat, lng], {
-        icon: L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
-        })
-      }).addTo(map).bindPopup("Game Player").openPopup();
+
+    /***********************
+     * HELPER FUNCTIONS
+     ***********************/
+    function toRad(value) { return value * Math.PI / 180; }
+    function toDeg(rad) { return rad * 180 / Math.PI; }
+    function getDistanceMiles(lat1, lon1, lat2, lon2) {
+        var R = 3958.8;
+        var dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+        var a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
-    createGamePlayerMarker(gameCurrentPos.lat, gameCurrentPos.lng);
-    
-    // Update game player position and store in Firebase
-    function updateGamePlayerPosition(lat, lng) {
-      gameCurrentPos = { lat, lng };
-      createGamePlayerMarker(lat, lng);
-      set(ref(dbGame, 'gamePlayers/' + gameUserId), {
-        location: gameCurrentPos,
-        inventory: gameInventory,
-        timestamp: serverTimestamp()
-      });
-      showGameNotification("Position updated: (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")");
+    function getBearing(lat1, lon1, lat2, lon2) {
+        var dLon = toRad(lon2 - lon1);
+        var y = Math.sin(dLon) * Math.cos(toRad(lat2));
+        var x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+        var brng = Math.atan2(y, x);
+        return (toDeg(brng) + 360) % 360;
     }
-    
-    // Listen for double-clicks on the map as game move commands
-    map.on('dblclick', (e) => {
-      console.log("Game move on double-click:", e.latlng);
-      updateGamePlayerPosition(e.latlng.lat, e.latlng.lng);
-    });
-    
-    // Update game inventory display
-    function updateGameInventoryDisplay() {
-      document.getElementById("gameInventory").innerText = gameInventory.join(", ") || "Empty";
+    function getCardinalDirection(deg) {
+        var directions = ['N','NE','E','SE','S','SW','W','NW'];
+        var index = Math.round(deg/45) % 8;
+        return directions[index];
     }
-    
-    // Show notifications in game HUD
-    function showGameNotification(message) {
-      const notifDiv = document.getElementById("gameNotif");
-      notifDiv.innerText = message;
-      setTimeout(() => { notifDiv.innerText = ""; }, 5000);
-    }
-    
-    // Simple Game Chat: send message on click
-    document.getElementById("sendGameChat").addEventListener("click", () => {
-      const msg = document.getElementById("gameChatInput").value;
-      if (msg.trim() !== "") {
-        push(ref(dbGame, 'gameChat'), {
-          user: gameUserId,
-          message: msg,
-          timestamp: serverTimestamp()
-        });
-        document.getElementById("gameChatInput").value = "";
-      }
-    });
-    
-    // Listen for game chat messages
-    onValue(ref(dbGame, 'gameChat'), (snapshot) => {
-      const chatDiv = document.getElementById("gameChat");
-      chatDiv.innerHTML = "";
-      snapshot.forEach(childSnap => {
-        const chatMsg = childSnap.val();
-        const msgEl = document.createElement("div");
-        msgEl.innerText = chatMsg.user + ": " + chatMsg.message;
-        chatDiv.appendChild(msgEl);
-      });
-      chatDiv.scrollTop = chatDiv.scrollHeight;
-    });
-    
-    // Clear game inventory button
-    document.getElementById("clearGameInv").addEventListener("click", () => {
-      gameInventory = [];
-      updateGameInventoryDisplay();
-      set(ref(dbGame, 'gamePlayers/' + gameUserId + '/inventory'), gameInventory);
-    });
-    
-    // Simple game loop: spawn zombies every 45 seconds near the game player
-    function spawnGameZombie() {
-      const latOffset = (Math.random() - 0.5) * 0.002;
-      const lngOffset = (Math.random() - 0.5) * 0.002;
-      const zLat = gameCurrentPos.lat + latOffset;
-      const zLng = gameCurrentPos.lng + lngOffset;
-      const zombie = L.marker([zLat, zLng], {
-        icon: L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
-        })
-      }).addTo(map);
-      zombie.bindPopup("Game Zombie! <br/><button onclick='defeatGameZombie(\"" + zLat + "\", \"" + zLng + "\")'>Attack</button>");
-      setTimeout(() => { map.removeLayer(zombie); }, 30000);
-    }
-    
-    // Expose defeatGameZombie so it can be called by the popup button
-    window.defeatGameZombie = function(zLat, zLng) {
-      map.closePopup();
-      const lootOptions = ["Zombie Tooth", "Scrap Metal", "Ammo Fragment"];
-      const loot = lootOptions[Math.floor(Math.random() * lootOptions.length)];
-      gameInventory.push(loot);
-      updateGameInventoryDisplay();
-      showGameNotification("Defeated zombie and looted: " + loot);
-    }
-    
-    setInterval(spawnGameZombie, 45000);
-    
-    // Live sync: notify if another game player is nearby (within 50 m)
-    onValue(ref(dbGame, 'gamePlayers'), (snapshot) => {
-      snapshot.forEach(childSnap => {
-        const p = childSnap.val();
-        if (childSnap.key !== gameUserId && p.location) {
-          const dist = map.distance(gameCurrentPos, L.latLng(p.location.lat, p.location.lng));
-          if (dist < 50) {
-            showGameNotification("Player " + childSnap.key + " is nearby on the game map!");
-          }
+    function getUserDirectionIndicator(roadLat, roadLon) {
+        var indicator = "";
+        if (currentLocationMarker) {
+            var userLatLng = currentLocationMarker.getLatLng();
+            var bearing = getBearing(userLatLng.lat, userLatLng.lng, roadLat, roadLon);
+            var cardinal = getCardinalDirection(bearing);
+            var arrow = "";
+            switch(cardinal) {
+                case "N": arrow = "&#8593;"; break;
+                case "NE": arrow = "&#8599;"; break;
+                case "E": arrow = "&#8594;"; break;
+                case "SE": arrow = "&#8600;"; break;
+                case "S": arrow = "&#8595;"; break;
+                case "SW": arrow = "&#8601;"; break;
+                case "W": arrow = "&#8592;"; break;
+                case "NW": arrow = "&#8598;"; break;
+                default: arrow = "";
+            }
+            indicator = "<span class='user-direction' title='From your location: " + cardinal + "'>" + arrow + "</span>";
         }
-      });
-    });
-    
-    console.log("Game module initialized.");
+        return indicator;
+    }
+    function getRHQCCode(lat, lng, bounds, maxLevel) {
+        var code = "";
+        var currentBounds = JSON.parse(JSON.stringify(bounds));
+        for (var level = 1; level <= maxLevel; level++) {
+            var south = currentBounds[0][0], west = currentBounds[0][1],
+                north = currentBounds[1][0], east = currentBounds[1][1];
+            var midLat = (south+north)/2, midLng = (west+east)/2;
+            if (lat >= midLat && lng <= midLng) {
+                code += "1";
+                currentBounds = [[midLat, west], [north, midLng]];
+            } else if (lat >= midLat && lng > midLng) {
+                code += "2";
+                currentBounds = [[midLat, midLng], [north, east]];
+            } else if (lat < midLat && lng <= midLng) {
+                code += "3";
+                currentBounds = [[south, west], [midLat, midLng]];
+            } else {
+                code += "4";
+                currentBounds = [[south, midLng], [midLat, east]];
+            }
+        }
+        return code;
+    }
   </script>
 </body>
 </html>

@@ -12,51 +12,100 @@
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
     
-    /* Top Control Bar (Search) */
+    /* Top Control Bar */
     #searchBar {
-      position: absolute; top: 5px; left: 10px;
-      z-index: 1500; background: rgba(255,255,255,0.9);
-      padding: 6px; border-radius: 4px; font-family: Arial, sans-serif;
+      position: absolute;
+      top: 5px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+      font-family: Arial, sans-serif;
     }
     #searchBar button, #searchBar input { margin: 2px; font-size: 12px; }
     
-    /* Road List Panel (Debugging) */
+    /* Road List Panel (for debugging) */
     #roadList {
-      position: absolute; top: 60px; right: 0;
-      width: 300px; max-height: calc(100% - 60px);
-      overflow-y: auto; background: rgba(255,255,255,0.95);
-      z-index: 1400; padding: 10px; font-family: Arial, sans-serif; font-size: 14px;
+      position: absolute;
+      top: 60px;
+      right: 0;
+      width: 300px;
+      max-height: calc(100% - 60px);
+      overflow-y: auto;
+      background: rgba(255,255,255,0.95);
+      z-index: 1400;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
     }
-    #roadList h3 { margin: 0; display: flex; justify-content: space-between; align-items: center; }
-    #roadFilter { width: 100%; margin: 5px 0; padding: 4px; box-sizing: border-box; font-size: 13px; }
+    #roadList h3 {
+      margin: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #roadFilter {
+      width: 100%;
+      margin: 5px 0;
+      padding: 4px;
+      box-sizing: border-box;
+      font-size: 13px;
+    }
     .road-item { padding: 5px; border-bottom: 1px solid #ccc; cursor: pointer; }
     .road-code { font-weight: bold; background: #f0f0f0; padding: 2px 4px; border-radius: 3px; }
     #roadListToggle {
-      position: absolute; top: 60px; right: 0; z-index: 1500;
-      display: none; background: rgba(255,255,255,0.9); padding: 5px 10px;
-      border-radius: 0 0 0 5px; cursor: pointer; font-family: Arial, sans-serif; font-size: 14px;
+      position: absolute;
+      top: 60px;
+      right: 0;
+      z-index: 1500;
+      display: none;
+      background: rgba(255,255,255,0.9);
+      padding: 5px 10px;
+      border-radius: 0 0 0 5px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
     }
     
     /* Status Display */
     #statusDisplay {
-      position: absolute; top: 5px; right: 10px; z-index: 2000;
-      background: rgba(255,255,255,0.9); padding: 6px; border-radius: 4px; font-size: 12px;
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      z-index: 2000;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 12px;
     }
     
     /* Login Overlay */
     #loginOverlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.7); z-index: 4000;
-      display: flex; justify-content: center; align-items: center;
-      color: #fff; flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 4000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      flex-direction: column;
     }
-    /* Bold, non-cursive GRIDWALKERS */
+    /* GRIDWALKERS header in bold, non-cursive, limegreen */
     #loginOverlay h1 {
-      font-family: Arial, sans-serif; font-weight: bold;
-      color: limegreen; font-size: 28px; margin-bottom: 20px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      color: limegreen;
+      font-size: 28px;
+      margin-bottom: 20px;
     }
     #loginOverlay form {
-      background: #333; padding: 20px; border-radius: 4px; text-align: center;
+      background: #333;
+      padding: 20px;
+      border-radius: 4px;
+      text-align: center;
     }
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
@@ -66,15 +115,21 @@
       display: inline-block;
     }
     .player-sprite > div {
-      width: 6px; height: 6px; margin: 0; padding: 0; line-height: 6px;
+      width: 6px;
+      height: 6px;
+      margin: 0;
+      padding: 0;
+      line-height: 6px;
     }
     .player-head { background: #f1c27d; }
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
-    /* Movement Radius Indicator */
+    /* Movement Radius Indicator (50 m) */
     .move-radius {
-      fill: rgba(0, 0, 255, 0.1); stroke: blue; stroke-width: 1;
+      fill: rgba(0, 0, 255, 0.1);
+      stroke: blue;
+      stroke-width: 1;
     }
   </style>
 </head>
@@ -99,7 +154,7 @@
   <!-- Map Container -->
   <div id="map"></div>
   
-  <!-- Road List Panel (Debug) -->
+  <!-- Road List Panel (Debugging) -->
   <div id="roadList">
     <h3>
       Road List
@@ -120,13 +175,13 @@
        ===================================================== */
     var playerMarker = null, spawnPoint = null;
     var playerHealth = 100, playerScore = 0;
-    var equippedItem = null;  // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
-    var backpack = [];  // Array, maximum 20 items
+    var equippedItem = null;  // Example: { type:"gun", name:"pistol", damage:1, range:100 }
+    var backpack = [];  // Maximum 20 items
     var map, drawnItems, gridBox, roadPolylines = [];
     var zombieLayer, lootLayer, moveIndicator;
-    var zombieMarkers = [];  // Array to hold zombie objects: { marker, zombieHealth }
-    var lootCooldowns = {};   // Object to hold cooldown timestamps
-    // Profiles storage
+    var zombieMarkers = [];  // Array of { marker, zombieHealth }
+    var lootCooldowns = {};   // Cooldown tracking for loot boxes
+    // Profile storage
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
       return profiles ? JSON.parse(profiles) : {};
@@ -167,9 +222,9 @@
       console.log("Login successful, initializing map. Spawn:", spawnPoint);
       document.getElementById("loginOverlay").style.display = "none";
       initMap();
-      if (spawnPoint) {
-        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
-        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
+      if (spawnPoint) { 
+        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon); 
+        map.setView([spawnPoint.lat, spawnPoint.lon], 18); 
       }
     });
     function saveState() {
@@ -188,14 +243,11 @@
         maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
       
-      // Initialize drawnItems and gridBox for RHQC
       drawnItems = new L.FeatureGroup();
       map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
-        draw: {
-          polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
-          rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } }
-        },
+        draw: { polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
+                rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } } },
         edit: { featureGroup: drawnItems, edit: true, remove: false }
       });
       map.addControl(drawControl);
@@ -211,11 +263,10 @@
         fetchAndDisplayRoads();
       });
       
-      // Initialize zombieLayer and lootLayer and add them to the map
+      // Initialize zombie and loot layers
       zombieLayer = L.layerGroup().addTo(map);
       lootLayer = L.layerGroup().addTo(map);
       
-      // Search Bar event
       document.getElementById("searchBtn").addEventListener("click", function() {
         var address = document.getElementById("addressInput").value;
         if (!address) return;
@@ -231,14 +282,13 @@
             } else { alert("Address not found!"); }
           });
       });
-      // Map click for player movement
       map.on('click', function(e) {
         if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
       });
     }
     
     /* =====================================================
-       PLAYER MOVEMENT – Using Original Code (3-Block Sprite)
+       PLAYER MOVEMENT (Original 3-block model)
        ===================================================== */
     function createPlayerHTML() {
       return '<div class="player-sprite">' +
@@ -250,7 +300,7 @@
     function spawnPlayerAt(lat, lon) {
       if (playerMarker) { map.removeLayer(playerMarker); }
       playerMarker = L.marker([lat, lon], {
-        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6, 18] })
+        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6,18] })
       }).addTo(map).bindPopup("You");
       spawnPoint = { lat: lat, lon: lon };
       updateMoveIndicator();
@@ -265,7 +315,7 @@
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
-      var speed = 20; // meters per second
+      var speed = 20;
       var duration = Math.max((totalDistance / speed) * 1000, 500);
       var startTime = null;
       function animate(timestamp) {
@@ -302,8 +352,8 @@
       var δ = distance / R;
       var θ = toRad(bearing);
       var φ1 = toRad(lat), λ1 = toRad(lon);
-      var φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
     
@@ -319,10 +369,13 @@
       var query = `[out:json][timeout:25];
         ( way["highway"](${bbox}); );
         out geom;`;
-      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body: "data=" + encodeURIComponent(query) })
+      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:"data=" + encodeURIComponent(query) })
       .then(response => response.json())
       .then(data => processRoadData(data.elements, bounds))
-      .catch(error => { console.error("Error fetching roads:", error); document.getElementById("roadsContainer").innerHTML = "Error loading roads."; });
+      .catch(error => {
+        console.error("Error fetching roads:", error);
+        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
+      });
     }
     function processRoadData(elements, gridBounds) {
       var roads = [];
@@ -493,7 +546,7 @@
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("Looted: " + loot.name + (loot.type==="ammo" ? " x" + loot.quantity : ""));
+              alert("Looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
               lootCooldowns[key] = Date.now() + (5 * 60 * 1000);
               saveState();
@@ -548,7 +601,7 @@
     /* =====================================================
        MULTIPLAYER PLACEHOLDER
        ===================================================== */
-    // TODO: Real-time multiplayer integration so players within 1000m see each other.
+    // TODO: Integrate a real-time backend so that players within 1000m can see one another.
     
   </script>
 </body>

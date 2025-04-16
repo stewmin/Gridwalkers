@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gridwalkers – Spawn & Move</title>
+  <title>Gridwalkers – Phase 3: Zombie Spawning</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Leaflet and Draw CSS -->
@@ -27,7 +27,7 @@
       font-size: 12px;
     }
 
-    /* Road List Panel (for fast-travel/fast-access, if needed later) */
+    /* Road List Panel (for debugging/fast travel) */
     #roadList {
       position: absolute;
       top: 60px;
@@ -111,7 +111,7 @@
   <!-- Map Container -->
   <div id="map"></div>
 
-  <!-- Road List Panel (for debugging or fast travel, if needed) -->
+  <!-- Road List Panel (for debugging display) -->
   <div id="roadList">
     <h3>
       Road List
@@ -166,7 +166,7 @@
      ***********************/
     var playerMarker = null;
     var spawnPoint = null;
-    var moveIndicator = null; // Circle indicating movement radius
+    var moveIndicator = null; // Visual circle showing allowed move distance
 
     // Create a custom HTML for the player: 3 stacked squares
     function createPlayerHTML() {
@@ -192,14 +192,13 @@
       updateMoveIndicator();
     }
 
-    // Draw or update a circle around the player showing movement radius (for visual feedback)
+    // Draw or update a circle around the player for visual feedback (50 m radius)
     function updateMoveIndicator() {
       if (moveIndicator) map.removeLayer(moveIndicator);
       if (!playerMarker) return;
       var pos = playerMarker.getLatLng();
-      // This circle is just visual. It no longer restricts movement.
       moveIndicator = L.circle(pos, {
-        radius: 50, // 50 m for visual feedback
+        radius: 50,
         className: 'move-radius'
       }).addTo(map);
     }
@@ -227,7 +226,7 @@
     /***********************
      * FETCH ROADS WITH GEOMETRY (Overpass API)
      ***********************/
-    var roadPolylines = []; // Array to store road polylines (for future fast travel or display)
+    var roadPolylines = []; // For future fast travel or debugging
     function fetchAndDisplayRoads() {
       if (!gridBox) {
         document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
@@ -236,7 +235,6 @@
       var bounds = gridBox.getBounds();
       var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
       var bbox = south + "," + west + "," + north + "," + east;
-      // Query: retrieve all highways with full geometry
       var query = `[out:json][timeout:25];
         (
           way["highway"](${bbox});
@@ -256,7 +254,7 @@
 
     function processRoadData(elements, gridBounds) {
       var roads = [];
-      roadPolylines = []; // reset
+      roadPolylines = []; // Reset the array
       elements.forEach(function(elem) {
         if (elem.type === "way" && elem.tags && elem.tags.name && elem.geometry) {
           var polyCoords = elem.geometry.map(pt => [pt.lat, pt.lon]);
@@ -264,7 +262,6 @@
           roadPolylines.push({ name: elem.tags.name, polyline: polyCoords });
         }
       });
-      // (For debugging/display: list roads by name and RHQC code)
       var html = "";
       roads.sort((a, b) => a.name.localeCompare(b.name));
       roads.forEach(function(road) {
@@ -284,7 +281,6 @@
         item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
       });
     }
-
     document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
       document.getElementById("roadList").style.display = "none";
       document.getElementById("roadListToggle").style.display = "block";
@@ -312,7 +308,7 @@
       return R * c;
     }
 
-    // RHQC Code calculation remains the same.
+    // RHQC Code calculation remains unchanged.
     function getRHQCCode(lat, lng, bounds, maxLevel) {
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
@@ -338,21 +334,21 @@
     }
 
     /***********************
-     * CLICK-TO-MOVE: FREE PLAYER Movement
+     * CLICK-TO-MOVE: FREE PLAYER MOVEMENT
      ***********************/
-    // Instead of snapping to road segments, clicking anywhere will animate movement.
+    // Instead of snapping to roads, clicking anywhere makes the player slowly move toward that point.
     map.on('click', function(e) {
-      if (!playerMarker) return; // No player yet
+      if (!playerMarker) return;
       animatePlayerMove(e.latlng.lat, e.latlng.lng);
     });
 
-    // Animate player movement from current position to target location.
+    // Animate player movement with smooth transition.
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
       var speed = 20; // meters per second
       var duration = (totalDistance / speed) * 1000;
-      if (duration < 500) duration = 500; // minimum 0.5 sec for very short distances
+      if (duration < 500) duration = 500;
       var startTime = null;
       function animate(timestamp) {
         if (!startTime) startTime = timestamp;
@@ -367,12 +363,36 @@
         }
       }
       requestAnimationFrame(animate);
-      // Optionally, pan the map slowly toward the target.
       map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
     }
 
-    // Update movement circle if the map moves.
     map.on('moveend', updateMoveIndicator);
+
+    /***********************
+     * PHASE 3: ZOMBIE SPAWNING
+     ***********************/
+    // Create a new layer to hold zombies.
+    var zombieLayer = L.layerGroup().addTo(map);
+
+    // Function to spawn a zombie marker at a random location.
+    function spawnZombie() {
+      var bounds = gridBox ? gridBox.getBounds() : map.getBounds();
+      var south = bounds.getSouth(), north = bounds.getNorth();
+      var west = bounds.getWest(), east = bounds.getEast();
+      var lat = south + Math.random() * (north - south);
+      var lng = west + Math.random() * (east - west);
+      // Create a simple zombie icon: a small red square with a skull symbol.
+      var zombieIcon = L.divIcon({
+        html: '<div style="width:8px; height:8px; background:red; color:white; font-size:10px; text-align:center;">&#9760;</div>',
+        iconSize: [8, 8],
+        className: ''
+      });
+      var zombieMarker = L.marker([lat, lng], { icon: zombieIcon });
+      zombieMarker.addTo(zombieLayer).bindPopup("Zombie!");
+    }
+
+    // Spawn a zombie every 15 seconds.
+    setInterval(spawnZombie, 15000);
   </script>
 </body>
 </html>

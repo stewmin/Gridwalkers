@@ -152,6 +152,12 @@
     .zombie-head { background: green; }
     .zombie-torso { background: darkgreen; }
     .zombie-boots { background: black; }
+    
+    /* Detection Radius (Invisible) */
+    .detection-radius {
+      fill: rgba(0, 0, 0, 0); /* fully transparent */
+      stroke: none;
+    }
   </style>
 </head>
 <body>
@@ -206,9 +212,9 @@
       var equippedItem = null;  // Example: { type:"gun", name:"pistol", damage:1, range:100 }
       var backpack = [];        // Array (max 20 items)
       var map, drawnItems, gridBox, roadPolylines = [];
-      var zombieLayer, lootLayer, moveIndicator;
+      var zombieLayer, lootLayer, moveIndicator, detectionRadius;
       var zombieMarkers = [];   // Array of zombie objects: { marker }
-      var lootCooldowns = {};   // Loot box cooldown timestamps
+      var lootCooldowns = {};   // Loot drop cooldown timestamps
 
       // Profile management via localStorage
       function loadProfiles() {
@@ -260,15 +266,21 @@
         spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
         map.setView([spawnPoint.lat, spawnPoint.lon], 18);
         
-        // Immediately fetch loot and start intervals
+        // Immediately fetch loot after player spawns
         fetchBuildingsAndSpawnLoot();
+        
+        // Start intervals for zombies, loot fetching, loot pickup, and polygon detection
         setInterval(spawnZombie, 30000);
         setInterval(updateZombies, 1000);
         setInterval(fetchBuildingsAndSpawnLoot, 30000);
         setInterval(checkLootPickup, 1000);
+        setInterval(updateDetectionRadiusAndLoot, 10000); // every 10 seconds
       });
       
-      // Saves current state to localStorage for currentUser
+      // Save state before unload
+      window.addEventListener("beforeunload", saveState);
+      
+      // Updates current state to localStorage
       function saveState() {
         if (!currentUser) return;
         var profiles = loadProfiles();
@@ -282,7 +294,7 @@
         saveProfiles(profiles);
       }
       
-      // Update inventory UI (for debugging: log backpack)
+      // For debugging: log backpack contents
       function updateInventoryUI() {
         console.log("Current Backpack:", backpack);
       }
@@ -301,51 +313,23 @@
         map.addLayer(drawnItems);
         var drawControl = new L.Control.Draw({
           draw: {
-            polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
-            rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } }
+            polyline: false, circle: false, marker: false, circlemarker: false,
+            rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } },
+            polygon: { allowIntersection: false, showArea: true, shapeOptions: { color: "#3388ff", weight: 2 } }
           },
           edit: { featureGroup: drawnItems, edit: true, remove: false }
         });
         map.addControl(drawControl);
         map.on(L.Draw.Event.CREATED, function(e) {
-          drawnItems.clearLayers();
-          gridBox = e.layer;
-          gridBox.setStyle({ opacity: 0, fillOpacity: 0 });
-          drawnItems.addLayer(gridBox);
-          fetchAndDisplayRoads();
+          drawnItems.addLayer(e.layer);
         });
         map.on('draw:edited', function() {
-          gridBox = drawnItems.getLayers()[0];
-          fetchAndDisplayRoads();
+          // No extra code – drawnItems is automatically updated.
         });
         
         // Initialize zombie and loot layers
         zombieLayer = L.layerGroup().addTo(map);
         lootLayer = L.layerGroup().addTo(map);
-        
-        // Search event: fetch location from address then teleport and spawn player
-        document.getElementById("searchBtn").addEventListener("click", function() {
-          var address = document.getElementById("addressInput").value;
-          if (!address) return;
-          var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(address);
-          fetch(url).then(response => response.json()).then(data => {
-            if (data.length > 0) {
-              var lat = parseFloat(data[0].lat),
-                  lon = parseFloat(data[0].lon);
-              map.setView([lat, lon], 18);
-              spawnPlayerAt(lat, lon);
-              spawnPoint = { lat: lat, lon: lon };
-              saveState();
-              // Immediately fetch loot on teleport
-              fetchBuildingsAndSpawnLoot();
-            } else { 
-              alert("Address not found!"); 
-            }
-          });
-        });
-        map.on('click', function(e) {
-          if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
-        });
       }
       
       /* =====================================================
@@ -417,6 +401,50 @@
         var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
         var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
         return { lat: toDeg(φ2), lng: toDeg(λ2) };
+      }
+      
+      /* =====================================================
+         DETECTION RADIUS & POLYGON SCAN FOR LOOT
+         ===================================================== */
+      function updateDetectionRadius() {
+        if (detectionRadius) { map.removeLayer(detectionRadius); }
+        if (!playerMarker) return;
+        let pos = playerMarker.getLatLng();
+        // Invisible circle with a larger radius (200m) for detection purposes
+        detectionRadius = L.circle(pos, { radius: 200, className: 'detection-radius' }).addTo(map);
+      }
+      
+      function checkPolygonsAndSpawnLoot() {
+        if (!playerMarker) return;
+        let playerPos = playerMarker.getLatLng();
+        // Scan all drawn layers – if it's a polygon, check if its center is within detection radius.
+        drawnItems.eachLayer(function(layer) {
+          if (!(layer instanceof L.Polygon)) return;
+          let polyCenter = layer.getBounds().getCenter();
+          let dist = getDistanceMeters(playerPos.lat, playerPos.lng, polyCenter.lat, polyCenter.lng);
+          if (dist > 200) return;  // Outside detection range
+          let key = polyCenter.lat.toFixed(5) + "_" + polyCenter.lng.toFixed(5);
+          if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
+          // Spawn loot marker inside the polygon.
+          // For simplicity we use the polygon's center. For variability, you might randomly pick a point within the polygon.
+          let loot = generateRandomLoot();
+          let lootIcon = L.divIcon({ html: '<div class="loot-box">L</div>', iconSize: [10,10], className: '' });
+          let lootMarker = L.marker([polyCenter.lat, polyCenter.lng], { icon: lootIcon });
+          lootMarker.lootKey = key;
+          lootMarker.loot = loot;
+          lootMarker.addTo(lootLayer);
+          console.log("Dropped loot:", key, loot.name);
+          // Manual click pickup
+          lootMarker.on('click', function() {
+            pickupLoot(lootMarker);
+          });
+        });
+      }
+      
+      // Helper to update detection radius and check for loot drop on polygons
+      function updateDetectionRadiusAndLoot() {
+        updateDetectionRadius();
+        checkPolygonsAndSpawnLoot();
       }
       
       /* =====================================================
@@ -609,51 +637,41 @@
       });
       
       /* =====================================================
-         LOOT SYSTEM: Buildings & Loot Drops within 1000m
+         LOOT SYSTEM: POLYGON DETECTION & LOOT DROPS
          ===================================================== */
+      // This version treats drawn polygons as "buildings".
       function fetchBuildingsAndSpawnLoot() {
         if (!playerMarker) return;
-        var playerPos = playerMarker.getLatLng();
-        // Use a delta approximating 1000m (0.009 deg ~ 1 km in latitude)
-        var delta = 0.009;
-        var south = playerPos.lat - delta, north = playerPos.lat + delta;
-        var west = playerPos.lng - delta, east = playerPos.lng + delta;
-        var bbox = south + "," + west + "," + north + "," + east;
-        console.log("Fetching buildings in bbox:", bbox);
-        var query = `[out:json][timeout:25];
-          ( way["building"](${bbox}); );
-          out center;`;
-        fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: "data=" + encodeURIComponent(query)
-        })
-        .then(response => response.json())
-        .then(data => {
-          console.log("Buildings returned:", data.elements.length);
-          data.elements.forEach(function(elem) {
-            if (elem.center) {
-              var bPos = { lat: elem.center.lat, lng: elem.center.lng };
-              // Only drop loot for buildings within 1000m of the player
-              if (getDistanceMeters(playerPos.lat, playerPos.lng, bPos.lat, bPos.lng) > 1000) return;
-              var key = bPos.lat.toFixed(5) + "_" + bPos.lng.toFixed(5);
-              if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
-              // Generate loot and create a loot marker
-              var loot = generateRandomLoot();
-              var lootIcon = L.divIcon({ html: '<div class="loot-box">L</div>', iconSize: [10,10], className: '' });
-              var marker = L.marker([bPos.lat, bPos.lng], { icon: lootIcon });
-              marker.lootKey = key;
-              marker.loot = loot;
-              marker.addTo(lootLayer);
-              console.log("Added loot drop:", key, loot.name);
-              // Allow manual click pickup as well
-              marker.on('click', function() {
-                pickupLoot(marker);
-              });
-            }
+        // This function will now simply scan drawnItems for polygons.
+        console.log("Scanning drawn polygons for loot drops...");
+        checkPolygonsAndSpawnLoot();
+      }
+      
+      // Check each polygon drawn in drawnItems – if its center is within the detection radius, drop loot inside it.
+      function checkPolygonsAndSpawnLoot() {
+        if (!playerMarker) return;
+        let playerPos = playerMarker.getLatLng();
+        drawnItems.eachLayer(function(layer) {
+          if (!(layer instanceof L.Polygon)) return;
+          let polyCenter = layer.getBounds().getCenter();
+          let dist = getDistanceMeters(playerPos.lat, playerPos.lng, polyCenter.lat, polyCenter.lng);
+          if (dist > 200) return; // outside detection range
+          let key = polyCenter.lat.toFixed(5) + "_" + polyCenter.lng.toFixed(5);
+          if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
+          let loot = generateRandomLoot();
+          let lootIcon = L.divIcon({ html: '<div class="loot-box">L</div>', iconSize: [10,10], className: '' });
+          let marker = L.marker([polyCenter.lat, polyCenter.lng], { icon: lootIcon });
+          marker.lootKey = key;
+          marker.loot = loot;
+          marker.addTo(lootLayer);
+          console.log("Dropped loot in polygon:", key, loot.name);
+          marker.on('click', function() {
+            pickupLoot(marker);
           });
         });
       }
-      // Function to pick up loot when player is close or clicks on it
+      
+      // Pickup function (manual or auto) 
       function pickupLoot(marker) {
         if (!marker.loot) return;
         backpack.push(marker.loot);
@@ -662,19 +680,23 @@
         lootLayer.removeLayer(marker);
         lootCooldowns[marker.lootKey] = Date.now() + (5 * 60 * 1000);
       }
-      // Check every second if the player is within 50m of any loot marker
+      
+      // Automatically check if player is within 50m of any loot marker
       function checkLootPickup() {
         if (!playerMarker) return;
-        var playerPos = playerMarker.getLatLng();
+        let playerPos = playerMarker.getLatLng();
         lootLayer.eachLayer(function(marker) {
-          var lootPos = marker.getLatLng();
-          var dist = getDistanceMeters(playerPos.lat, playerPos.lng, lootPos.lat, lootPos.lng);
+          let lootPos = marker.getLatLng();
+          let dist = getDistanceMeters(playerPos.lat, playerPos.lng, lootPos.lat, lootPos.lng);
           if (dist < 50) {
             pickupLoot(marker);
           }
         });
       }
       
+      /* =====================================================
+         GENERATE RANDOM LOOT
+         ===================================================== */
       function generateRandomLoot() {
         var lootTable = [
           { chance: 0.3, item: { type:"ammo", name:"ammo", quantity:10 } },
@@ -710,12 +732,134 @@
         localStorage.removeItem("gridwalkers_profiles");
         location.reload();
       }
-      window.addEventListener("beforeunload", saveState);
       
       /* =====================================================
-         MULTIPLAYER PLACEHOLDER
+         ZOMBIE SPAWNING & AI
          ===================================================== */
-      // TODO: Integrate real-time multiplayer so players within a certain range can see each other.
+      function spawnZombie() {
+        if (!playerMarker) return;
+        let playerPos = playerMarker.getLatLng();
+        let distance = 100 + Math.random() * 100;
+        let angle = Math.random() * 360;
+        let spawn = destinationPoint(playerPos.lat, playerPos.lng, angle, distance);
+        let zombieIcon = L.divIcon({ html: createZombieHTML(), iconSize: [6,18], className: '' });
+        let marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
+        marker.addTo(zombieLayer).bindPopup("Zombie!");
+        marker.zombieHealth = 3;
+        zombieMarkers.push({ marker: marker });
+      }
+      function createZombieHTML() {
+        return '<div class="zombie-sprite">' +
+                 '<div class="zombie-head"></div>' +
+                 '<div class="zombie-torso"></div>' +
+                 '<div class="zombie-boots"></div>' +
+               '</div>';
+      }
+      function updateZombies() {
+        if (!playerMarker) return;
+        let playerPos = playerMarker.getLatLng();
+        for (let i = zombieMarkers.length - 1; i >= 0; i--) {
+          let zObj = zombieMarkers[i];
+          let zombiePos = zObj.marker.getLatLng();
+          let dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
+          if (dist > 1000) { 
+            zombieLayer.removeLayer(zObj.marker); 
+            zombieMarkers.splice(i, 1);
+            continue;
+          }
+          let target = null, speed = 0;
+          if (dist < 50) { 
+            target = { lat: playerPos.lat, lng: playerPos.lng };
+            speed = 18;
+          } else {
+            let wanderDist = Math.random() * 5;
+            let wanderAngle = Math.random() * 360;
+            target = destinationPoint(zombiePos.lat, zombiePos.lng, wanderAngle, wanderDist);
+            speed = 10;
+          }
+          animateZombieMove(zObj.marker, target.lat, target.lng, speed);
+          if (dist < 5) {
+            playerHealth -= 1;
+            updateStatusDisplay();
+            if (playerHealth <= 0) {
+              alert("You have been overwhelmed by zombies!");
+              resetGame();
+              return;
+            }
+          }
+        }
+      }
+      function animateZombieMove(marker, targetLat, targetLng, speed) {
+        let startPos = marker.getLatLng();
+        let totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
+        let duration = Math.max((totalDistance / speed) * 1000, 500);
+        let startTime = null;
+        function animate(timestamp) {
+          if (!startTime) startTime = timestamp;
+          let progress = (timestamp - startTime) / duration;
+          if (progress > 1) progress = 1;
+          let newLat = startPos.lat + (targetLat - startPos.lat) * progress;
+          let newLng = startPos.lng + (targetLng - startPos.lng) * progress;
+          marker.setLatLng([newLat, newLng]);
+          if (progress < 1) { requestAnimationFrame(animate); }
+        }
+        requestAnimationFrame(animate);
+      }
+      
+      /* =====================================================
+         ZOMBIE COMBAT: CLICK-TO-SHOOT
+         ===================================================== */
+      zombieLayer.on('click', function(e) {
+        if (!equippedItem || equippedItem.type !== "gun") {
+          alert("Equip a gun to shoot!");
+          return;
+        }
+        let clickedMarker = e.layer;
+        for (let i = 0; i < zombieMarkers.length; i++) {
+          if (zombieMarkers[i].marker === clickedMarker) {
+            let playerPos = playerMarker.getLatLng();
+            let zombiePos = clickedMarker.getLatLng();
+            let dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
+            if (dist > equippedItem.range) {
+              alert("Target out of range for " + equippedItem.name);
+              return;
+            }
+            let ammoIndex = backpack.findIndex(item => item.type === "ammo");
+            if (ammoIndex < 0) {
+              alert("No ammunition!");
+              return;
+            }
+            backpack[ammoIndex].quantity--;
+            if (backpack[ammoIndex].quantity <= 0) { backpack.splice(ammoIndex, 1); }
+            clickedMarker.zombieHealth -= equippedItem.damage;
+            if (clickedMarker.zombieHealth <= 0) {
+              zombieLayer.removeLayer(clickedMarker);
+              zombieMarkers.splice(i, 1);
+              playerScore++;
+              updateStatusDisplay();
+            }
+            updateInventoryUI();
+            return;
+          }
+        }
+      });
+      
+      /* =====================================================
+         STATUS DISPLAY UPDATE
+         ===================================================== */
+      function updateStatusDisplay() {
+        document.getElementById("healthDisplay").textContent = playerHealth;
+        document.getElementById("scoreDisplay").textContent = playerScore;
+      }
+      
+      /* =====================================================
+         GAME RESET
+         ===================================================== */
+      function resetGame() {
+        alert("Game Over! Your score: " + playerScore);
+        localStorage.removeItem("gridwalkers_profiles");
+        location.reload();
+      }
       
     }); // End of DOMContentLoaded
   </script>

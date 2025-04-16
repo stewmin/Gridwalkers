@@ -27,7 +27,7 @@
       font-size: 12px;
     }
 
-    /* Road List Panel */
+    /* Road List Panel (for fast-travel/fast-access, if needed later) */
     #roadList {
       position: absolute;
       top: 60px;
@@ -79,7 +79,7 @@
       font-size: 14px;
     }
 
-    /* Player Sprite: 3 stacked squares (head, shirt, boots) */
+    /* Player Sprite: 3 stacked squares (head, torso, boots) */
     .player-sprite {
       display: inline-block;
     }
@@ -88,7 +88,6 @@
       height: 6px;
       margin: 0;
       padding: 0;
-      line-height: 6px;
     }
     .player-head { background: #f1c27d; } /* flesh tone */
     .player-torso { background: blue; }
@@ -112,7 +111,7 @@
   <!-- Map Container -->
   <div id="map"></div>
 
-  <!-- Road List Panel (for debug/display purposes) -->
+  <!-- Road List Panel (for debugging or fast travel, if needed) -->
   <div id="roadList">
     <h3>
       Road List
@@ -167,15 +166,14 @@
      ***********************/
     var playerMarker = null;
     var spawnPoint = null;
-    var moveRadius = 50; // allowed movement distance in meters
-    var moveIndicator = null; // circle to visualize movement radius
+    var moveIndicator = null; // Circle indicating movement radius
 
-    // Create a custom HTML for player: 3 stacked squares
+    // Create a custom HTML for the player: 3 stacked squares
     function createPlayerHTML() {
       return '<div class="player-sprite">' +
-                '<div class="player-head"></div>' +
-                '<div class="player-torso"></div>' +
-                '<div class="player-boots"></div>' +
+               '<div class="player-head"></div>' +
+               '<div class="player-torso"></div>' +
+               '<div class="player-boots"></div>' +
              '</div>';
     }
 
@@ -194,13 +192,14 @@
       updateMoveIndicator();
     }
 
-    // Draw or update a circle around the player showing move radius.
+    // Draw or update a circle around the player showing movement radius (for visual feedback)
     function updateMoveIndicator() {
       if (moveIndicator) map.removeLayer(moveIndicator);
       if (!playerMarker) return;
       var pos = playerMarker.getLatLng();
+      // This circle is just visual. It no longer restricts movement.
       moveIndicator = L.circle(pos, {
-        radius: moveRadius,
+        radius: 50, // 50 m for visual feedback
         className: 'move-radius'
       }).addTo(map);
     }
@@ -228,7 +227,7 @@
     /***********************
      * FETCH ROADS WITH GEOMETRY (Overpass API)
      ***********************/
-    var roadPolylines = []; // Array to store road polyline objects
+    var roadPolylines = []; // Array to store road polylines (for future fast travel or display)
     function fetchAndDisplayRoads() {
       if (!gridBox) {
         document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
@@ -237,7 +236,7 @@
       var bounds = gridBox.getBounds();
       var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
       var bbox = south + "," + west + "," + north + "," + east;
-      // Query: get all highways with full geometry
+      // Query: retrieve all highways with full geometry
       var query = `[out:json][timeout:25];
         (
           way["highway"](${bbox});
@@ -265,11 +264,10 @@
           roadPolylines.push({ name: elem.tags.name, polyline: polyCoords });
         }
       });
-      // (For debugging/display, list roads by name and their RHQC code.)
+      // (For debugging/display: list roads by name and RHQC code)
       var html = "";
       roads.sort((a, b) => a.name.localeCompare(b.name));
       roads.forEach(function(road) {
-        // Compute an approximate center for display purposes:
         var mid = road.polyline[Math.floor(road.polyline.length/2)];
         var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
         html += "<div class='road-item'><span class='road-code'>" + code + "</span> " + road.name + "</div>";
@@ -286,6 +284,7 @@
         item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
       });
     }
+
     document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
       document.getElementById("roadList").style.display = "none";
       document.getElementById("roadListToggle").style.display = "block";
@@ -296,14 +295,14 @@
     });
 
     /***********************
-     * HELPER FUNCTIONS (Distance, Bearing, Closest Point)
+     * HELPER FUNCTIONS (Distance & Bearing)
      ***********************/
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
 
     // Haversine distance in meters
     function getDistanceMeters(lat1, lon1, lat2, lon2) {
-      var R = 6371000; // meters
+      var R = 6371000;
       var dLat = toRad(lat2 - lat1);
       var dLon = toRad(lon2 - lon1);
       var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -311,77 +310,6 @@
               Math.sin(dLon/2) * Math.sin(dLon/2);
       var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
-    }
-
-    // Compute the projection of point p onto segment (p1, p2)
-    // p, p1, p2: objects with lat and lng
-    function getClosestPointOnSegment(p, p1, p2) {
-      // Convert lat/lon to Cartesian coordinates (approximation for small distances)
-      function latLonToXY(lat, lon) {
-        var R = 6371000; // meters
-        var x = R * toRad(lon) * Math.cos(toRad(lat));
-        var y = R * toRad(lat);
-        return { x, y };
-      }
-      var P = latLonToXY(p.lat, p.lng);
-      var A = latLonToXY(p1.lat, p1.lng);
-      var B = latLonToXY(p2.lat, p2.lng);
-      var AB = { x: B.x - A.x, y: B.y - A.y };
-      var AP = { x: P.x - A.x, y: P.y - A.y };
-      var ab2 = AB.x*AB.x + AB.y*AB.y;
-      var t = (AP.x*AB.x + AP.y*AB.y) / ab2;
-      t = Math.max(0, Math.min(1, t));
-      var closest = { 
-        x: A.x + AB.x * t, 
-        y: A.y + AB.y * t 
-      };
-      // Convert back to lat/lon approximatively
-      var deltaX = closest.x - A.x, deltaY = closest.y - A.y;
-      var dLon = toDeg(deltaX / (6371000 * Math.cos(toRad(p1.lat))));
-      var dLat = toDeg(deltaY / 6371000);
-      return { lat: p1.lat + dLat, lng: p1.lng + dLon };
-    }
-
-    // For a polyline (array of [lat, lon] arrays) and point (object with lat,lng),
-    // return the closest point on the polyline and the distance in meters.
-    function getClosestPointOnPolyline(polyline, point) {
-      var minDist = Infinity;
-      var closestPoint = null;
-      for (var i = 0; i < polyline.length - 1; i++) {
-        var p1 = { lat: polyline[i][0], lng: polyline[i][1] };
-        var p2 = { lat: polyline[i+1][0], lng: polyline[i+1][1] };
-        var candidate = getClosestPointOnSegment(point, p1, p2);
-        var dist = getDistanceMeters(point.lat, point.lng, candidate.lat, candidate.lng);
-        if (dist < minDist) {
-          minDist = dist;
-          closestPoint = candidate;
-        }
-      }
-      return { point: closestPoint, distance: minDist };
-    }
-
-    // Compute bearing (in degrees) from point A to point B
-    function getBearing(lat1, lon1, lat2, lon2) {
-      var dLon = toRad(lon2 - lon1);
-      var y = Math.sin(dLon) * Math.cos(toRad(lat2));
-      var x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-              Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-      var brng = Math.atan2(y, x);
-      return (toDeg(brng) + 360) % 360;
-    }
-
-    // Given starting point, bearing, and distance (in meters), compute destination point.
-    function destinationPoint(lat, lon, bearing, distance) {
-      var R = 6371000; // radius in meters
-      var δ = distance / R;
-      var θ = toRad(bearing);
-      var φ1 = toRad(lat);
-      var λ1 = toRad(lon);
-      var φ2 = Math.asin( Math.sin(φ1)*Math.cos(δ) +
-                          Math.cos(φ1)*Math.sin(δ)*Math.cos(θ) );
-      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
-                               Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
-      return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
 
     // RHQC Code calculation remains the same.
@@ -410,53 +338,40 @@
     }
 
     /***********************
-     * CLICK-TO-MOVE (Player Movement)
+     * CLICK-TO-MOVE: FREE PLAYER Movement
      ***********************/
+    // Instead of snapping to road segments, clicking anywhere will animate movement.
     map.on('click', function(e) {
-      // Only proceed if playerMarker exists (i.e. player spawned)
-      if (!playerMarker) return;
-      // Get the clicked point
-      var clickLatLng = e.latlng;
-      // Create a point object for helper functions
-      var clickPoint = { lat: clickLatLng.lat, lng: clickLatLng.lng };
-      var nearest = { distance: Infinity, snapped: null };
-      // Loop through all road polylines to find the nearest point along any road
-      roadPolylines.forEach(function(road) {
-        var result = getClosestPointOnPolyline(road.polyline, clickPoint);
-        if (result.distance < nearest.distance) {
-          nearest.distance = result.distance;
-          nearest.snapped = result.point;
-        }
-      });
-      var tolerance = 10; // tolerance in meters to consider tap "on a road"
-      if (!nearest.snapped || nearest.distance > tolerance) {
-        // Click not close enough to any road.
-        console.log("No road within tolerance (" + nearest.distance.toFixed(1) + " m).");
-        return;
-      }
-      // Now, determine move step from current player location.
-      var currentPos = playerMarker.getLatLng();
-      var currentPoint = { lat: currentPos.lat, lng: currentPos.lng };
-      var moveDist = getDistanceMeters(currentPoint.lat, currentPoint.lng, nearest.snapped.lat, nearest.snapped.lng);
-      var destination = null;
-      if (moveDist <= moveRadius) {
-        destination = nearest.snapped;
-      } else {
-        // Move only moveRadius (50 m) toward the snapped point.
-        var bearing = getBearing(currentPoint.lat, currentPoint.lng, nearest.snapped.lat, nearest.snapped.lng);
-        destination = destinationPoint(currentPoint.lat, currentPoint.lng, bearing, moveRadius);
-        // Optionally, snap destination back onto the road if within tolerance:
-        var snapResult = getClosestPointOnPolyline(roadPolylines[0].polyline, destination);
-        if (snapResult.distance < tolerance) {
-          destination = snapResult.point;
-        }
-      }
-      // Move the player marker (for now, instantly; later, you can animate this change)
-      spawnPlayerAt(destination.lat, destination.lng);
-      map.panTo([destination.lat, destination.lng]);
+      if (!playerMarker) return; // No player yet
+      animatePlayerMove(e.latlng.lat, e.latlng.lng);
     });
 
-    // Update the movement circle when map view changes (if needed)
+    // Animate player movement from current position to target location.
+    function animatePlayerMove(targetLat, targetLng) {
+      var startPos = playerMarker.getLatLng();
+      var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
+      var speed = 20; // meters per second
+      var duration = (totalDistance / speed) * 1000;
+      if (duration < 500) duration = 500; // minimum 0.5 sec for very short distances
+      var startTime = null;
+      function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = (timestamp - startTime) / duration;
+        if (progress > 1) progress = 1;
+        var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
+        var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
+        playerMarker.setLatLng([newLat, newLng]);
+        updateMoveIndicator();
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      }
+      requestAnimationFrame(animate);
+      // Optionally, pan the map slowly toward the target.
+      map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
+    }
+
+    // Update movement circle if the map moves.
     map.on('moveend', updateMoveIndicator);
   </script>
 </body>

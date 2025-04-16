@@ -97,7 +97,7 @@
 
   <script>
   window.onload = function() {
-    // — Initialize Firebase — (replace these with your actual config)
+    // Initialize Firebase (replace with your config)
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_AUTH_DOMAIN",
@@ -108,22 +108,25 @@
       appId: "YOUR_APP_ID"
     };
     firebase.initializeApp(firebaseConfig);
+
     const auth = firebase.auth();
     const db   = firebase.database();
 
-    // — Globals & State —
+    // Globals
     let map, drawnItems, gridBox;
     let playerMarker, moveIndicator;
     let playerHealth = 100, playerScore = 0, backpack = [], equippedItem = null, currentUser = null;
     let zombieLayer, lootLayer, zombieMarkers = [];
-    const DETECT_RADIUS    = 150;    // meters
-    const buildingCooldowns = {};    // { "lat_lon": timestamp }
+    const DETECT_RADIUS     = 150;
+    const buildingCooldowns = {};
 
-    // — Utility Functions —
+    // Utilities
     function toRad(d){ return d * Math.PI / 180; }
     function getDist(lat1, lon1, lat2, lon2){
       const R = 6371000, dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+      const a = Math.sin(dLat/2)**2
+              + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))
+              * Math.sin(dLon/2)**2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
     function destination(lat,lon,br,dist){
@@ -137,7 +140,7 @@
       return {lat:φ2*180/Math.PI, lng:λ2*180/Math.PI};
     }
 
-    // — Firebase State Save/Load —
+    // Save & Load
     function saveStateToFirebase(){
       if(!currentUser || !playerMarker) return;
       db.ref('users/' + currentUser).set({
@@ -161,31 +164,41 @@
       });
     }
 
-    // — Authentication —
+    // Auth state listener
+    auth.onAuthStateChanged(user => {
+      if(user){
+        currentUser = user.uid;
+        document.getElementById("loginOverlay").style.display = "none";
+        if(!map) {
+          startGame();
+          loadStateFromFirebase(currentUser);
+        }
+      } else {
+        document.getElementById("loginOverlay").style.display = "flex";
+      }
+    });
+
+    // Register
     document.getElementById("registerBtn").onclick = () => {
       const email = document.getElementById("emailInput").value.trim();
       const pw    = document.getElementById("passwordInput").value;
       auth.createUserWithEmailAndPassword(email, pw)
-        .then(() => alert("Registered! Please log in."))
-        .catch(e => alert("Registration failed: "+e.message));
-    };
-    document.getElementById("loginBtn").onclick = () => {
-      const email = document.getElementById("emailInput").value.trim();
-      const pw    = document.getElementById("passwordInput").value;
-      auth.signInWithEmailAndPassword(email, pw)
-        .then(uc => {
-          currentUser = uc.user.uid;
-          document.getElementById("loginOverlay").style.display = "none";
-          startGame();
-          loadStateFromFirebase(currentUser);
-        })
-        .catch(e => alert("Login failed: "+e.message));
+        .then(() => alert("Registration successful!"))
+        .catch(err => alert("Registration failed: " + err.message));
     };
 
-    // — Start Game (after login) —
+    // Login
+    document.getElementById("loginBtn").onclick = () => {
+      const email = document.getElementById("emailInput").value.trim();
+      const pw    = document.getElementById("
+      passwordInput").value;
+      auth.signInWithEmailAndPassword(email, pw)
+        .catch(err => alert("Login failed: " + err.message));
+    };
+
+    // Start Game
     function startGame(){
       initMap();
-      // once the playerMarker layer is added, begin spawning
       map.on('layeradd', e => {
         if(e.layer === playerMarker){
           spawnZombie(); updateZombies(); fetchLoot();
@@ -196,7 +209,7 @@
       });
     }
 
-    // — Initialize Map & Controls —
+    // Map & Controls
     function initMap(){
       map = L.map("map").setView([36.85, -87.55], 13);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ maxZoom:19 }).addTo(map);
@@ -230,7 +243,6 @@
           });
       };
 
-      // Road list toggles & filter
       document.getElementById("toggleRoadListBtn").onclick = () => {
         document.getElementById("roadList").style.display="none";
         document.getElementById("roadListToggle").style.display="block";
@@ -247,7 +259,7 @@
       };
     }
 
-    // — Player & Movement —
+    // Player
     function createPlayerIcon(){
       return L.divIcon({ html:
         '<div class="player-sprite">'+
@@ -273,7 +285,7 @@
       moveIndicator = L.circle(playerMarker.getLatLng(),{ radius:50, className:"move-radius" }).addTo(map);
     }
 
-    // — Roads via Overpass & RHQC —
+    // Roads & RHQC
     function loadRoads(){
       if(!gridBox) return;
       const b  = gridBox.getBounds();
@@ -311,7 +323,7 @@
       return code;
     }
 
-    // — Zombies & Combat —
+    // Zombies & Combat
     function spawnZombie(){
       if(!playerMarker) return;
       const P = playerMarker.getLatLng();
@@ -379,7 +391,7 @@
         });
     }
 
-    // — Building Loot w/ Cooldown —
+    // Building Loot w/ Cooldown
     function fetchLoot(){
       if(!playerMarker) return;
       const P    = playerMarker.getLatLng(), d=0.01;
@@ -430,7 +442,7 @@
       return {type:"ammo",name:"ammo",quantity:5};
     }
 
-    // — Status & Save on Exit —
+    // Status & Save
     function updateStatus(){
       document.getElementById("healthDisplay").textContent = playerHealth;
       document.getElementById("scoreDisplay").textContent  = playerScore;

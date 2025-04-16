@@ -121,19 +121,6 @@
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
-    /* Zombie Sprite Styling */
-    .zombie-sprite {
-      display: inline-block;
-    }
-    .zombie-sprite > div {
-      width: 6px;
-      height: 6px;
-      display: block;
-    }
-    .zombie-head { background: green; }
-    .zombie-torso { background: darkgreen; }
-    .zombie-boots { background: black; }
-    
     /* Movement Radius Indicator (50 m) */
     .move-radius {
       fill: rgba(0, 0, 255, 0.1);
@@ -201,13 +188,13 @@
        ===================================================== */
     var playerMarker = null, spawnPoint = null;
     var playerHealth = 100, playerScore = 0;
-    var equippedItem = null;  // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
+    var equippedItem = null;  // Example: { type:"gun", name:"pistol", damage:1, range:100 }
     var backpack = [];        // Array (max 20 items)
     var map, drawnItems, gridBox, roadPolylines = [];
     var zombieLayer, lootLayer, moveIndicator;
-    var zombieMarkers = [];   // Array of zombie objects: { marker }
-    var lootCooldowns = {};   // Loot box cooldown timestamps
-    
+    var zombieMarkers = [];   // Array of zombie objects: { marker, zombieHealth }
+    var lootCooldowns = {};    // Loot box cooldown timestamps
+
     // Profile management via localStorage
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
@@ -224,7 +211,6 @@
     document.getElementById("registerBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
-      console.log("Register clicked:", username);
       if (!username || !password) { alert("Please provide both username and password."); return; }
       var profiles = loadProfiles();
       if (profiles[username]) { alert("Username already exists. Choose another."); return; }
@@ -235,7 +221,6 @@
     document.getElementById("loginBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
-      console.log("Login clicked for:", username);
       if (!username || !password) { alert("Please provide both username and password."); return; }
       var profiles = loadProfiles();
       if (!profiles[username]) { alert("User not found. Please register first."); return; }
@@ -247,15 +232,6 @@
       equippedItem = state.equipped;
       backpack = state.backpack;
       spawnPoint = state.spawnPoint;
-      
-      // Assign default gun and ammo if not present
-      if (!equippedItem) { 
-        equippedItem = { type: "gun", name: "pistol", damage: 1, range: 100 };
-      }
-      if (!backpack.some(item => item.type === "ammo")) {
-        backpack.push({ type:"ammo", name:"ammo", quantity:10 });
-      }
-      
       updateStatusDisplay();
       // Hide login overlay and initialize the map
       document.getElementById("loginOverlay").style.display = "none";
@@ -279,7 +255,7 @@
       };
       saveProfiles(profiles);
     }
-    // Update inventory UI; here we simply log the backpack
+    // Update inventory UI (if using a dedicated element, you can extend this function)
     function updateInventoryUI() {
       console.log("Current Backpack:", backpack);
     }
@@ -320,7 +296,7 @@
       zombieLayer = L.layerGroup().addTo(map);
       lootLayer = L.layerGroup().addTo(map);
       
-      // Search: fetch location from address then teleport and spawn player
+      // Search event: fetch location from address then teleport and spawn player
       document.getElementById("searchBtn").addEventListener("click", function() {
         var address = document.getElementById("addressInput").value;
         if (!address) return;
@@ -331,7 +307,6 @@
                 lon = parseFloat(data[0].lon);
             map.setView([lat, lon], 18);
             spawnPlayerAt(lat, lon);
-            // Save new spawn point
             spawnPoint = { lat: lat, lon: lon };
             saveState();
           } else { 
@@ -342,10 +317,6 @@
       map.on('click', function(e) {
         if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
       });
-      
-      // For immediate testing, spawn a zombie and fetch loot right away
-      spawnZombie();
-      fetchBuildingsAndSpawnLoot();
     }
     
     /* =====================================================
@@ -376,7 +347,7 @@
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
-      var speed = 20; // m/s
+      var speed = 20; // meters per second
       var duration = Math.max((totalDistance / speed) * 1000, 500);
       var startTime = null;
       function animate(timestamp) {
@@ -552,9 +523,7 @@
         }
       }
     }
-    // Improved animation: cancel any ongoing animation before starting a new one
     function animateZombieMove(marker, targetLat, targetLng, speed) {
-      if (marker.animationFrameId) { cancelAnimationFrame(marker.animationFrameId); }
       var startPos = marker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
       var duration = Math.max((totalDistance / speed) * 1000, 500);
@@ -566,13 +535,9 @@
         var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         marker.setLatLng([newLat, newLng]);
-        if (progress < 1) {
-          marker.animationFrameId = requestAnimationFrame(animate);
-        } else {
-          marker.animationFrameId = null;
-        }
+        if (progress < 1) { requestAnimationFrame(animate); }
       }
-      marker.animationFrameId = requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
     }
     setInterval(spawnZombie, 30000);
     setInterval(updateZombies, 1000);
@@ -693,9 +658,15 @@
     window.addEventListener("beforeunload", saveState);
     
     /* =====================================================
+       UPDATE LOOP (Zombies)
+       ===================================================== */
+    setInterval(updateZombies, 1000);
+    
+    /* =====================================================
        MULTIPLAYER PLACEHOLDER
        ===================================================== */
     // TODO: Integrate real-time multiplayer so players within a certain range can see each other.
+    
   </script>
 </body>
 </html>

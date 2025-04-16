@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gridwalkers – Zombie Survival Prototype</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet and Draw CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <style>
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
+    #searchBar {
+      position: absolute;
+      top: 5px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+    }
+    #searchBar button, #searchBar input { margin: 2px; font-size: 12px; }
+    #statusDisplay {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      z-index: 2000;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .loot-box {
+      width: 10px;
+      height: 10px;
+      background: sienna;
+      border: 1px solid #000;
+      text-align: center;
+      line-height: 10px;
+      color: #fff;
+      font-size: 8px;
+    }
+    .player-sprite > div {
+      width: 6px;
+      height: 6px;
+      line-height: 6px;
+    }
+    .player-head { background: #f1c27d; }
+    .player-torso { background: blue; }
+    .player-boots { background: black; }
+    .move-radius {
+      fill: rgba(0, 0, 255, 0.1);
+      stroke: blue;
+      stroke-width: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <h1>GRIDWALKERS</h1>
+    <form id="loginForm">
+      <input type="text" id="usernameInput" placeholder="Username" required /><br>
+      <input type="password" id="passwordInput" placeholder="Password" required /><br>
+      <button type="button" id="registerBtn">Register</button>
+      <button type="button" id="loginBtn">Login</button>
+    </form>
+  </div>
+
+  <div id="searchBar">
+    <input type="text" id="addressInput" placeholder="Enter your address" size="20" />
+    <button id="searchBtn">Search</button>
+  </div>
+
+  <div id="statusDisplay">
+    Health: <span id="healthDisplay">100</span> | Score: <span id="scoreDisplay">0</span>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script>
+    var playerMarker = null, spawnPoint = null;
+    var playerHealth = 100, playerScore = 0;
+    var equippedItem = null;
+    var backpack = [];
+    var map, drawnItems, gridBox;
+    var zombieLayer, lootLayer, moveIndicator;
+    var zombieMarkers = [];
+    var lootCooldowns = {};
+    var currentUser = null;
+
+    function loadProfiles() {
+      var profiles = localStorage.getItem("gridwalkers_profiles");
+      return profiles ? JSON.parse(profiles) : {};
+    }
+
+    function saveProfiles(profiles) {
+      localStorage.setItem("gridwalkers_profiles", JSON.stringify(profiles));
+    }
+
+    document.getElementById("registerBtn").addEventListener("click", function() {
+      var username = document.getElementById("usernameInput").value.trim();
+      var password = document.getElementById("passwordInput").value;
+      if (!username || !password) return alert("Username & Password required");
+      var profiles = loadProfiles();
+      if (profiles[username]) return alert("Username taken");
+      profiles[username] = {
+        password,
+        state: { health: 100, score: 0, equipped: null, backpack: [], spawnPoint: null }
+      };
+      saveProfiles(profiles);
+      alert("Registered! Now login.");
+    });
+
+    document.getElementById("loginBtn").addEventListener("click", function() {
+      var username = document.getElementById("usernameInput").value.trim();
+      var password = document.getElementById("passwordInput").value;
+      var profiles = loadProfiles();
+      if (!profiles[username] || profiles[username].password !== password)
+        return alert("Invalid login.");
+      currentUser = username;
+      var state = profiles[username].state;
+      playerHealth = state.health;
+      playerScore = state.score;
+      equippedItem = state.equipped;
+      backpack = state.backpack;
+      spawnPoint = state.spawnPoint;
+      updateStatusDisplay();
+      document.getElementById("loginOverlay").style.display = "none";
+      initMap();
+      if (spawnPoint) {
+        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
+        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
+      }
+    });
+
+    function saveState() {
+      if (!currentUser) return;
+      var profiles = loadProfiles();
+      profiles[currentUser].state = {
+        health: playerHealth,
+        score: playerScore,
+        equipped: equippedItem,
+        backpack: backpack,
+        spawnPoint: spawnPoint
+      };
+      saveProfiles(profiles);
+    }
+    function updateStatusDisplay() {
+      document.getElementById("healthDisplay").textContent = playerHealth;
+      document.getElementById("scoreDisplay").textContent = playerScore;
+    }
+
+    function updateInventoryUI() {
+      console.log("Backpack:", backpack);
+    }
+
+    function initMap() {
+      map = L.map('map').setView([36.85, -87.55], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      zombieLayer = L.layerGroup().addTo(map);
+      lootLayer = L.layerGroup().addTo(map);
+
+      document.getElementById("searchBtn").addEventListener("click", function() {
+        var address = document.getElementById("addressInput").value;
+        if (!address) return;
+        var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(address);
+        fetch(url).then(response => response.json()).then(data => {
+          if (data.length > 0) {
+            var lat = parseFloat(data[0].lat),
+                lon = parseFloat(data[0].lon);
+            map.setView([lat, lon], 18);
+            spawnPlayerAt(lat, lon);
+            spawnPoint = { lat, lon };
+            saveState();
+          } else {
+            alert("Address not found!");
+          }
+        });
+      });
+
+      map.on('click', function(e) {
+        if (playerMarker) animatePlayerMove(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    function createPlayerHTML() {
+      return '<div class="player-sprite">' +
+               '<div class="player-head"></div>' +
+               '<div class="player-torso"></div>' +
+               '<div class="player-boots"></div>' +
+             '</div>';
+    }
+
+    function spawnPlayerAt(lat, lon) {
+      if (playerMarker) map.removeLayer(playerMarker);
+      playerMarker = L.marker([lat, lon], {
+        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6,18] })
+      }).addTo(map).bindPopup("You");
+
+      spawnPoint = { lat, lon };
+      updateMoveIndicator();
+      spawnZombie(); // 🧟 Injected: zombie spawn on player load
+      fetchBuildingsAndSpawnLoot(); // 📦 Injected: loot spawn on player load
+      saveState();
+    }
+
+    function updateMoveIndicator() {
+      if (moveIndicator) map.removeLayer(moveIndicator);
+      if (!playerMarker) return;
+      var pos = playerMarker.getLatLng();
+      moveIndicator = L.circle(pos, { radius: 50, className: 'move-radius' }).addTo(map);
+    }
+
+    function animatePlayerMove(targetLat, targetLng) {
+      var startPos = playerMarker.getLatLng();
+      var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
+      var speed = 20;
+      var duration = Math.max((totalDistance / speed) * 1000, 500);
+      var startTime = null;
+      function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = (timestamp - startTime) / duration;
+        if (progress > 1) progress = 1;
+        var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
+        var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
+        playerMarker.setLatLng([newLat, newLng]);
+        updateMoveIndicator();
+        if (progress < 1) requestAnimationFrame(animate);
+        else saveState();
+      }
+      requestAnimationFrame(animate);
+      map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
+    }
+
+    function destinationPoint(lat, lon, bearing, distance) {
+      const R = 6371000;
+      const δ = distance / R;
+      const θ = (bearing * Math.PI) / 180;
+      const φ1 = (lat * Math.PI) / 180;
+      const λ1 = (lon * Math.PI) / 180;
+      const φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+      const λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      return { lat: φ2 * 180 / Math.PI, lng: λ2 * 180 / Math.PI };
+    }
+
+    function getDistanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function spawnZombie() {
+      if (!playerMarker) return;
+      const p = playerMarker.getLatLng();
+      const angle = Math.random() * 360;
+      const dist = 100 + Math.random() * 100;
+      const spawn = destinationPoint(p.lat, p.lng, angle, dist);
+      const marker = L.marker([spawn.lat, spawn.lng], {
+        icon: L.divIcon({ html: '<div class="zombie-head"></div><div class="zombie-torso"></div><div class="zombie-boots"></div>', iconSize: [6,18], className: '' })
+      }).addTo(zombieLayer);
+      marker.zombieHealth = 3;
+      zombieMarkers.push({ marker });
+    }
+
+    function updateZombies() {
+      if (!playerMarker) return;
+      const p = playerMarker.getLatLng();
+      zombieMarkers.forEach((z, i) => {
+        const zPos = z.marker.getLatLng();
+        const d = getDistanceMeters(p.lat, p.lng, zPos.lat, zPos.lng);
+        if (d > 1000) {
+          zombieLayer.removeLayer(z.marker);
+          zombieMarkers.splice(i, 1);
+          return;
+        }
+        if (d < 5) {
+          playerHealth--;
+          updateStatusDisplay();
+          if (playerHealth <= 0) resetGame();
+        }
+        const target = d < 50 ? p : destinationPoint(zPos.lat, zPos.lng, Math.random()*360, Math.random()*5);
+        z.marker.setLatLng([zPos.lat + (target.lat - zPos.lat)*0.02, zPos.lng + (target.lng - zPos.lng)*0.02]);
+      });
+    }
+
+    function fetchBuildingsAndSpawnLoot() {
+      if (!playerMarker) return;
+      const p = playerMarker.getLatLng();
+      const delta = 0.01;
+      const bbox = [p.lat - delta, p.lng - delta, p.lat + delta, p.lng + delta].join(',');
+      const query = `[out:json][timeout:25];( way["building"](${bbox}); );out center;`;
+      fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: "data=" + encodeURIComponent(query)
+      }).then(res => res.json()).then(data => {
+        data.elements.forEach(elem => {
+          if (elem.center) {
+            const key = `${elem.center.lat.toFixed(5)}_${elem.center.lng.toFixed(5)}`;
+            if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
+            const marker = L.marker([elem.center.lat, elem.center.lng], {
+              icon: L.divIcon({ html: '<div class="loot-box">L</div>', iconSize: [10,10], className: '' })
+            });
+            marker.on('click', () => {
+              const loot = generateRandomLoot();
+              if (backpack.length >= 20) {
+                alert("Backpack full!");
+                return;
+              }
+              backpack.push(loot);
+              updateInventoryUI();
+              alert(`Looted: ${loot.name}${loot.type === "ammo" ? " x" + loot.quantity : ""}`);
+              lootLayer.removeLayer(marker);
+              lootCooldowns[key] = Date.now() + 5 * 60 * 1000;
+            });
+            marker.addTo(lootLayer);
+          }
+        });
+      });
+    }
+
+    function generateRandomLoot() {
+      const lootTable = [
+        { chance: 0.3, item: { type:"ammo", name:"ammo", quantity:10 } },
+        { chance: 0.2, item: { type:"gun", name:"pistol", damage:1, range:100 } },
+        { chance: 0.15, item: { type:"gun", name:"shotgun", damage:3, range:20 } },
+        { chance: 0.15, item: { type:"gun", name:"AR15", damage:2, range:200 } },
+        { chance: 0.1, item: { type:"gun", name:"hunting rifle", damage:3, range:400 } },
+        { chance: 0.1, item: { type:"consumable", name:"bandage", effect:"heal", amount:10 } }
+      ];
+      let rand = Math.random(), cumulative = 0;
+      for (let i = 0; i < lootTable.length; i++) {
+        cumulative += lootTable[i].chance;
+        if (rand < cumulative) return JSON.parse(JSON.stringify(lootTable[i].item));
+      }
+      return { type:"ammo", name:"ammo", quantity:5 };
+    }
+
+    function useBandage() {
+      let index = backpack.findIndex(i => i.type === "consumable" && i.name.toLowerCase() === "bandage");
+      if (index < 0) return alert("No bandages.");
+      if (playerHealth >= 100) return alert("Already full health.");
+      let bandage = backpack[index];
+      let healed = bandage.amount || 10;
+      playerHealth = Math.min(100, playerHealth + healed);
+      backpack.splice(index, 1);
+      updateStatusDisplay();
+      updateInventoryUI();
+      alert("💉 Bandage used! +" + healed + " HP");
+    }
+
+    document.addEventListener("keydown", function(e) {
+      if (e.key.toLowerCase() === "h") useBandage();
+    });
+
+    function resetGame() {
+      alert("Game Over! Score: " + playerScore);
+      localStorage.removeItem("gridwalkers_profiles");
+      location.reload();
+    }
+
+    window.addEventListener("beforeunload", saveState);
+    setInterval(updateZombies, 1000);
+    setInterval(spawnZombie, 30000);
+    setInterval(fetchBuildingsAndSpawnLoot, 30000);
+  </script>
+</body>
+</html>

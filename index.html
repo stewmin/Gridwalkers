@@ -12,102 +12,59 @@
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
     
-    /* Top Control Bar */
+    /* Top Control Bar (Search) */
     #searchBar {
-      position: absolute;
-      top: 5px;
-      left: 10px;
-      z-index: 1500;
-      background: rgba(255,255,255,0.9);
-      padding: 6px;
-      border-radius: 4px;
+      position: absolute; top: 5px; left: 10px;
+      z-index: 1500; background: rgba(255,255,255,0.9);
+      padding: 6px; border-radius: 4px; font-family: Arial, sans-serif;
     }
     #searchBar button, #searchBar input { margin: 2px; font-size: 12px; }
     
-    /* Road List Panel (for debugging) */
+    /* Road List Panel (Debugging) */
     #roadList {
-      position: absolute;
-      top: 60px;
-      right: 0;
-      width: 300px;
-      max-height: calc(100% - 60px);
-      overflow-y: auto;
-      background: rgba(255,255,255,0.95);
-      z-index: 1400;
-      padding: 10px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
+      position: absolute; top: 60px; right: 0;
+      width: 300px; max-height: calc(100% - 60px);
+      overflow-y: auto; background: rgba(255,255,255,0.95);
+      z-index: 1400; padding: 10px; font-family: Arial, sans-serif; font-size: 14px;
     }
-    #roadList h3 {
-      margin: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    #roadFilter {
-      width: 100%;
-      margin: 5px 0;
-      padding: 4px;
-      box-sizing: border-box;
-      font-size: 13px;
-    }
-    .road-item {
-      padding: 5px;
-      border-bottom: 1px solid #ccc;
-      cursor: pointer;
-    }
-    .road-code {
-      font-weight: bold;
-      background: #f0f0f0;
-      padding: 2px 4px;
-      border-radius: 3px;
-    }
+    #roadList h3 { margin: 0; display: flex; justify-content: space-between; align-items: center; }
+    #roadFilter { width: 100%; margin: 5px 0; padding: 4px; box-sizing: border-box; font-size: 13px; }
+    .road-item { padding: 5px; border-bottom: 1px solid #ccc; cursor: pointer; }
+    .road-code { font-weight: bold; background: #f0f0f0; padding: 2px 4px; border-radius: 3px; }
     #roadListToggle {
-      position: absolute;
-      top: 60px;
-      right: 0;
-      z-index: 1500;
-      display: none;
-      background: rgba(255,255,255,0.9);
-      padding: 5px 10px;
-      border-radius: 0 0 0 5px;
-      cursor: pointer;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
+      position: absolute; top: 60px; right: 0; z-index: 1500;
+      display: none; background: rgba(255,255,255,0.9); padding: 5px 10px;
+      border-radius: 0 0 0 5px; cursor: pointer; font-family: Arial, sans-serif; font-size: 14px;
+    }
+    
+    /* Status Display */
+    #statusDisplay {
+      position: absolute; top: 5px; right: 10px; z-index: 2000;
+      background: rgba(255,255,255,0.9); padding: 6px; border-radius: 4px; font-size: 12px;
     }
     
     /* Login Overlay */
     #loginOverlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.7);
-      z-index: 4000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: #fff;
-      flex-direction: column;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); z-index: 4000;
+      display: flex; justify-content: center; align-items: center;
+      color: #fff; flex-direction: column;
     }
-    /* GRIDWALKERS in bold, non-cursive */
+    /* Bold, non-cursive GRIDWALKERS */
     #loginOverlay h1 {
-      font-family: Arial, sans-serif;
-      font-weight: bold;
-      color: limegreen;
-      font-size: 28px;
-      margin-bottom: 20px;
+      font-family: Arial, sans-serif; font-weight: bold;
+      color: limegreen; font-size: 28px; margin-bottom: 20px;
     }
     #loginOverlay form {
-      background: #333;
-      padding: 20px;
-      border-radius: 4px;
-      text-align: center;
+      background: #333; padding: 20px; border-radius: 4px; text-align: center;
     }
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
     
     /* Player Sprite: 3 Stacked Squares */
-    .player-sprite { display: inline-block; }
+    .player-sprite {
+      display: inline-block;
+    }
     .player-sprite > div {
       width: 6px; height: 6px; margin: 0; padding: 0; line-height: 6px;
     }
@@ -115,11 +72,9 @@
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
-    /* Movement Radius Indicator (50 m) */
+    /* Movement Radius Indicator */
     .move-radius {
-      fill: rgba(0, 0, 255, 0.1);
-      stroke: blue;
-      stroke-width: 1;
+      fill: rgba(0, 0, 255, 0.1); stroke: blue; stroke-width: 1;
     }
   </style>
 </head>
@@ -144,7 +99,7 @@
   <!-- Map Container -->
   <div id="map"></div>
   
-  <!-- Road List Panel (Debugging) -->
+  <!-- Road List Panel (Debug) -->
   <div id="roadList">
     <h3>
       Road List
@@ -160,15 +115,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   
   <script>
-    /***********************
-     * GLOBAL STATE & PROFILE HANDLING
-     ***********************/
+    /* =====================================================
+       GLOBAL VARIABLES & LAYER INITIALIZATION
+       ===================================================== */
     var playerMarker = null, spawnPoint = null;
     var playerHealth = 100, playerScore = 0;
-    var equippedItem = null; // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
-    var backpack = []; // max 20 items
+    var equippedItem = null;  // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
+    var backpack = [];  // Array, maximum 20 items
     var map, drawnItems, gridBox, roadPolylines = [];
-    
+    var zombieLayer, lootLayer, moveIndicator;
+    var zombieMarkers = [];  // Array to hold zombie objects: { marker, zombieHealth }
+    var lootCooldowns = {};   // Object to hold cooldown timestamps
+    // Profiles storage
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
       return profiles ? JSON.parse(profiles) : {};
@@ -178,9 +136,9 @@
     }
     var currentUser = null;
     
-    /***********************
-     * LOGIN FUNCTIONALITY
-     ***********************/
+    /* =====================================================
+       LOGIN FUNCTIONALITY
+       ===================================================== */
     document.getElementById("registerBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
@@ -192,7 +150,6 @@
       saveProfiles(profiles);
       alert("Registration successful! Now log in.");
     });
-    
     document.getElementById("loginBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
@@ -207,15 +164,14 @@
       equippedItem = state.equipped; backpack = state.backpack;
       spawnPoint = state.spawnPoint;
       updateStatusDisplay();
-      console.log("Login successful, initializing map. Spawn point:", spawnPoint);
+      console.log("Login successful, initializing map. Spawn:", spawnPoint);
       document.getElementById("loginOverlay").style.display = "none";
       initMap();
-      if (spawnPoint) { 
-        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon); 
-        map.setView([spawnPoint.lat, spawnPoint.lon], 18); 
+      if (spawnPoint) {
+        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
+        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
       }
     });
-    
     function saveState() {
       if (!currentUser) return;
       var profiles = loadProfiles();
@@ -223,15 +179,18 @@
       saveProfiles(profiles);
     }
     
-    /***********************
-     * INIT MAP & DRAW CONTROL
-     ***********************/
+    /* =====================================================
+       INIT MAP & LAYER INITIALIZATION
+       ===================================================== */
     function initMap() {
       map = L.map('map').setView([36.85, -87.55], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-      drawnItems = new L.FeatureGroup(); map.addLayer(drawnItems);
+      
+      // Initialize drawnItems and gridBox for RHQC
+      drawnItems = new L.FeatureGroup();
+      map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
         draw: {
           polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
@@ -251,6 +210,12 @@
         gridBox = drawnItems.getLayers()[0];
         fetchAndDisplayRoads();
       });
+      
+      // Initialize zombieLayer and lootLayer and add them to the map
+      zombieLayer = L.layerGroup().addTo(map);
+      lootLayer = L.layerGroup().addTo(map);
+      
+      // Search Bar event
       document.getElementById("searchBtn").addEventListener("click", function() {
         var address = document.getElementById("addressInput").value;
         if (!address) return;
@@ -266,14 +231,15 @@
             } else { alert("Address not found!"); }
           });
       });
+      // Map click for player movement
       map.on('click', function(e) {
         if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
       });
     }
     
-    /***********************
-     * PLAYER MOVEMENT & MARKER (Original Foundation)
-     ***********************/
+    /* =====================================================
+       PLAYER MOVEMENT – Using Original Code (3-Block Sprite)
+       ===================================================== */
     function createPlayerHTML() {
       return '<div class="player-sprite">' +
                '<div class="player-head"></div>' +
@@ -284,7 +250,7 @@
     function spawnPlayerAt(lat, lon) {
       if (playerMarker) { map.removeLayer(playerMarker); }
       playerMarker = L.marker([lat, lon], {
-        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6,18] })
+        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6, 18] })
       }).addTo(map).bindPopup("You");
       spawnPoint = { lat: lat, lon: lon };
       updateMoveIndicator();
@@ -299,7 +265,7 @@
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
-      var speed = 20;
+      var speed = 20; // meters per second
       var duration = Math.max((totalDistance / speed) * 1000, 500);
       var startTime = null;
       function animate(timestamp) {
@@ -316,9 +282,9 @@
       map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
     }
     
-    /***********************
-     * HELPER FUNCTIONS (Distance & Destination)
-     ***********************/
+    /* =====================================================
+       HELPER FUNCTIONS: Distance & Destination
+       ===================================================== */
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
     function getDistanceMeters(lat1, lon1, lat2, lon2) {
@@ -328,7 +294,7 @@
       var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
               Math.sin(dLon/2) * Math.sin(dLon/2);
-      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
     function destinationPoint(lat, lon, bearing, distance) {
@@ -336,28 +302,14 @@
       var δ = distance / R;
       var θ = toRad(bearing);
       var φ1 = toRad(lat), λ1 = toRad(lon);
-      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      var φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
-    function getRHQCCode(lat, lng, bounds, maxLevel) {
-      var code = "";
-      var currentBounds = JSON.parse(JSON.stringify(bounds));
-      for (var level = 1; level <= maxLevel; level++) {
-        var south = currentBounds[0][0], west = currentBounds[0][1],
-            north = currentBounds[1][0], east = currentBounds[1][1];
-        var midLat = (south + north) / 2, midLng = (west + east) / 2;
-        if (lat >= midLat && lng <= midLng) { code += "1"; currentBounds = [[midLat, west], [north, midLng]]; }
-        else if (lat >= midLat && lng > midLng) { code += "2"; currentBounds = [[midLat, midLng], [north, east]]; }
-        else if (lat < midLat && lng <= midLng) { code += "3"; currentBounds = [[south, west], [midLat, midLng]]; }
-        else { code += "4"; currentBounds = [[south, midLng], [midLat, east]]; }
-      }
-      return code;
-    }
     
-    /***********************
-     * FETCH ROADS (Overpass API)
-     ***********************/
+    /* =====================================================
+       FETCH ROADS (Overpass API)
+       ===================================================== */
     var roadPolylines = [];
     function fetchAndDisplayRoads() {
       if (!gridBox) { document.getElementById("roadsContainer").innerHTML = "No grid box defined."; return; }
@@ -383,7 +335,7 @@
         }
       });
       var html = "";
-      roads.sort((a,b) => a.name.localeCompare(b.name));
+      roads.sort((a, b) => a.name.localeCompare(b.name));
       roads.forEach(function(road) {
         var mid = road.polyline[Math.floor(road.polyline.length/2)];
         var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
@@ -408,10 +360,24 @@
       document.getElementById("roadList").style.display = "block";
       document.getElementById("roadListToggle").style.display = "none";
     });
+    function getRHQCCode(lat, lng, bounds, maxLevel) {
+      var code = "";
+      var currentBounds = JSON.parse(JSON.stringify(bounds));
+      for (var level = 1; level <= maxLevel; level++) {
+        var south = currentBounds[0][0], west = currentBounds[0][1],
+            north = currentBounds[1][0], east = currentBounds[1][1];
+        var midLat = (south + north) / 2, midLng = (west + east) / 2;
+        if (lat >= midLat && lng <= midLng) { code += "1"; currentBounds = [[midLat, west], [north, midLng]]; }
+        else if (lat >= midLat && lng > midLng) { code += "2"; currentBounds = [[midLat, midLng], [north, east]]; }
+        else if (lat < midLat && lng <= midLng) { code += "3"; currentBounds = [[south, west], [midLat, midLng]]; }
+        else { code += "4"; currentBounds = [[south, midLng], [midLat, east]]; }
+      }
+      return code;
+    }
     
-    /***********************
-     * ZOMBIE SPAWNING & AI (unchanged)
-     ***********************/
+    /* =====================================================
+       ZOMBIE SPAWNING & AI
+       ===================================================== */
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
@@ -469,9 +435,9 @@
     setInterval(spawnZombie, 30000);
     setInterval(updateZombies, 1000);
     
-    /***********************
-     * ZOMBIE COMBAT: CLICK-TO-SHOOT
-     ***********************/
+    /* =====================================================
+       ZOMBIE COMBAT: CLICK-TO-SHOOT
+       ===================================================== */
     zombieLayer.on('click', function(e) {
       if (!equippedItem || equippedItem.type !== "gun") { alert("Equip a gun to shoot!"); return; }
       var clickedMarker = e.layer;
@@ -499,9 +465,9 @@
       }
     });
     
-    /***********************
-     * LOOT SYSTEM: Buildings & Loot Boxes (5-min Cooldown)
-     ***********************/
+    /* =====================================================
+       LOOT SYSTEM: Buildings & Loot Boxes (5-min Cooldown)
+       ===================================================== */
     var lootCooldowns = {};
     function fetchBuildingsAndSpawnLoot() {
       if (!playerMarker) return;
@@ -513,7 +479,7 @@
       var query = `[out:json][timeout:25];
         ( way["building"](${bbox}); );
         out center;`;
-      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body: "data=" + encodeURIComponent(query) })
+      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:"data=" + encodeURIComponent(query) })
       .then(response => response.json())
       .then(data => {
         data.elements.forEach(function(elem) {
@@ -554,17 +520,17 @@
     }
     setInterval(fetchBuildingsAndSpawnLoot, 30000);
     
-    /***********************
-     * STATUS DISPLAY
-     ***********************/
+    /* =====================================================
+       STATUS DISPLAY
+       ===================================================== */
     function updateStatusDisplay() {
       document.getElementById("healthDisplay").textContent = playerHealth;
       document.getElementById("scoreDisplay").textContent = playerScore;
     }
     
-    /***********************
-     * GAME RESET
-     ***********************/
+    /* =====================================================
+       GAME RESET
+       ===================================================== */
     function resetGame() {
       alert("Game Over! Your score: " + playerScore);
       var profiles = loadProfiles();
@@ -574,12 +540,15 @@
     }
     window.addEventListener("beforeunload", saveState);
     
-    /***********************
-     * UPDATE LOOP (Zombies)
-     ***********************/
+    /* =====================================================
+       UPDATE LOOP (Zombies)
+       ===================================================== */
     setInterval(updateZombies, 1000);
     
-    /* MULTIPLAYER PLACEHOLDER - TODO */
+    /* =====================================================
+       MULTIPLAYER PLACEHOLDER
+       ===================================================== */
+    // TODO: Real-time multiplayer integration so players within 1000m see each other.
     
   </script>
 </body>

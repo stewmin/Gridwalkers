@@ -93,7 +93,7 @@
       color: #333;
       margin-bottom: 5px;
     }
-    /* Inventory contents inside modal */
+    /* Inventory items inside modal */
     #equippedModal, #backpackModal {
       border: 1px solid #ccc;
       background: #fafafa;
@@ -129,7 +129,8 @@
       flex-direction: column;
     }
     #loginOverlay h1 {
-      font-family: 'Press Start 2P', cursive;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
       color: limegreen;
       font-size: 28px;
       margin-bottom: 20px;
@@ -142,7 +143,6 @@
     }
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     
     /* Player Sprite: 3 stacked squares (head, torso, boots) */
     .player-sprite {
@@ -266,10 +266,12 @@
     
     // For zombie management.
     var zombieLayer = L.layerGroup();
-    var zombieMarkers = []; // Each zombie object: { marker, shotsRemaining }
+    var zombieMarkers = []; // Each zombie object: { marker, zombieHealth }
     
     // For loot boxes.
     var lootLayer = L.layerGroup();
+    // We'll store lootBox cooldowns by a unique key (e.g., lat_lng)
+    var lootCooldowns = {};
     
     // Map & RHQC elements.
     var map, drawnItems, gridBox, roadPolylines = [];
@@ -358,7 +360,7 @@
     }
     
     /***********************
-     * LEFT PANEL MODAL TOGGLING
+     * LEFT SIDEBAR MODAL TOGGLING
      ***********************/
     function toggleModal(modalId) {
       var modal = document.getElementById(modalId);
@@ -406,7 +408,6 @@
         };
         backpackContent.appendChild(itemDiv);
       });
-      // Fill empty slots up to 20.
       while (backpackContent.childNodes.length < 20) {
         var emptyDiv = document.createElement("div");
         emptyDiv.className = "inv-item";
@@ -414,6 +415,12 @@
         emptyDiv.textContent = "";
         backpackContent.appendChild(emptyDiv);
       }
+    }
+    function updateInventoryUI() {
+      var equippedIcon = document.getElementById("equippedIcon");
+      equippedIcon.textContent = equippedItem ? equippedItem.name.substring(0,2).toUpperCase() : "EQ";
+      var backpackIcon = document.getElementById("backpackIcon");
+      backpackIcon.textContent = backpack.length;
     }
     
     /***********************
@@ -473,6 +480,9 @@
         if (!playerMarker) return;
         animatePlayerMove(e.latlng.lat, e.latlng.lng);
       });
+      
+      // Multiplayer placeholder:
+      // TODO: Integrate Firebase for real-time player positions so all players within 1000m can see one another.
     }
     
     /***********************
@@ -656,7 +666,8 @@
       });
       var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
       marker.addTo(zombieLayer).bindPopup("Zombie!");
-      marker.shotsRemaining = 3;
+      // Instead of shotsRemaining, assign full health.
+      marker.zombieHealth = 3;
       zombieMarkers.push({ marker: marker });
     }
     function createZombieHTML() {
@@ -680,9 +691,9 @@
           continue;
         }
         var target = null, speed = 0;
-        if (dist < 50) { // Lock on when within 50m.
+        if (dist < 50) { // lock onto player if within 50m
           target = { lat: playerPos.lat, lng: playerPos.lng };
-          speed = 18;
+          speed = 18; // chase speed, slightly slower than player
         } else {
           var wanderDist = Math.random() * 5;
           var wanderAngle = Math.random() * 360;
@@ -690,7 +701,7 @@
           speed = 10;
         }
         animateZombieMove(zObj.marker, target.lat, target.lng, speed);
-        // If zombie is within 5m, inflict 1 damage per second.
+        // If zombie is within 5m, inflict damage on the player.
         if (dist < 5) {
           playerHealth -= 1;
           updateStatusDisplay();
@@ -730,6 +741,7 @@
         return;
       }
       var clickedMarker = e.layer;
+      // Find the associated zombie.
       for (var i = 0; i < zombieMarkers.length; i++) {
         if (zombieMarkers[i].marker === clickedMarker) {
           var playerPos = playerMarker.getLatLng();
@@ -744,12 +756,14 @@
             alert("No ammunition!");
             return;
           }
+          // Remove one ammo.
           backpack[ammoIndex].quantity--;
           if (backpack[ammoIndex].quantity <= 0) {
             backpack.splice(ammoIndex, 1);
           }
-          clickedMarker.shotsRemaining--;
-          if (clickedMarker.shotsRemaining <= 0) {
+          // Remove ammo and apply damage.
+          clickedMarker.zombieHealth -= equippedItem.damage;
+          if (clickedMarker.zombieHealth <= 0) {
             zombieLayer.removeLayer(clickedMarker);
             zombieMarkers.splice(i, 1);
             playerScore++;
@@ -763,12 +777,12 @@
     });
     
     /***********************
-     * LOOT SYSTEM: BUILDINGS & LOOT BOXES
+     * LOOT SYSTEM: BUILDINGS & LOOT BOXES WITH COOLDOWN
      ***********************/
     function fetchBuildingsAndSpawnLoot() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
-      var delta = 0.005;
+      var delta = 0.005; // rough ~500m range
       var south = playerPos.lat - delta, north = playerPos.lat + delta;
       var west = playerPos.lng - delta, east = playerPos.lng + delta;
       var bbox = south + "," + west + "," + north + "," + east;
@@ -785,19 +799,23 @@
       .then(data => {
         data.elements.forEach(function(elem) {
           if (elem.center) {
+            var key = elem.center.lat.toFixed(5) + "_" + elem.center.lng.toFixed(5);
+            if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return; // still on cooldown
             var lootIcon = L.divIcon({
               html: '<div class="loot-box">L</div>',
               iconSize: [10,10],
               className: ''
             });
-            var marker = L.marker([elem.center.lat, elem.center.lon], { icon: lootIcon });
+            var marker = L.marker([elem.center.lat, elem.center.lng], { icon: lootIcon });
             marker.addTo(lootLayer);
             marker.on('click', function() {
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("You looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
+              alert("You looted: " + loot.name + (loot.type==="ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
+              // Set cooldown for 5 minutes.
+              lootCooldowns[key] = Date.now() + (5 * 60 * 1000);
               saveState();
             });
           }
@@ -832,15 +850,6 @@
       document.getElementById("healthDisplay").textContent = playerHealth;
       document.getElementById("scoreDisplay").textContent = playerScore;
     }
-    function updateInventoryUI() {
-      // Update icons with a label badge showing counts if desired.
-      // For modal content, updateEquippedModal() and updateBackpackModal() are called on modal open.
-      // Here we update the small icon labels.
-      var equippedIcon = document.getElementById("equippedIcon");
-      equippedIcon.textContent = equippedItem ? equippedItem.name.substring(0,2).toUpperCase() : "EQ";
-      var backpackIcon = document.getElementById("backpackIcon");
-      backpackIcon.textContent = backpack.length;
-    }
     
     /***********************
      * GAME RESET
@@ -858,6 +867,12 @@
      * UPDATE LOOP
      ***********************/
     setInterval(updateZombies, 1000);
+    
+    /***********************
+     * MULTIPLAYER PLACEHOLDER
+     ***********************/
+    // TODO: Integrate a real-time backend (e.g., Firebase) so that players can see others
+    // within 1000m of each other. This prototype uses localStorage and runs solo.
     
   </script>
 </body>

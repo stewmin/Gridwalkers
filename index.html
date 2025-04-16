@@ -4,21 +4,40 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gridwalkers Sandbox Prototype</title>
-  <!-- Leaflet CSS & JS -->
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
     integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
-    integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
-  <!-- Firebase App (the core Firebase SDK) -->
-  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
-  <!-- Firebase Realtime Database -->
-  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #222; color: #eee; }
-    #map { width: 100%; height: 90%; }
-    #notif { padding: 5px; text-align: center; background: #444; }
-    #inventory { padding: 10px; background: #333; }
-    .btn { padding: 6px 12px; margin: 4px; background: #555; color: #eee; cursor: pointer; border: none; border-radius: 4px; }
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+      background: #222;
+      color: #eee;
+    }
+    #map {
+      width: 100%;
+      height: 90%;
+    }
+    #notif {
+      padding: 5px;
+      text-align: center;
+      background: #444;
+    }
+    #inventory {
+      padding: 10px;
+      background: #333;
+    }
+    .btn {
+      padding: 6px 12px;
+      margin: 4px;
+      background: #555;
+      color: #eee;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -35,49 +54,59 @@
     <button id="clearInv" class="btn">Clear Inventory</button>
   </div>
 
-  <script>
-    console.log("Gridwalkers script loaded");
-
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+    integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
+  
+  <!-- Our main script using Firebase modular SDK -->
+  <script type="module">
+    // Import Firebase modules from the CDN
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
+    
     /***********************
      * Firebase Setup
      ***********************/
-    // Firebase project configuration for Gridwalkers (updated)
+    // Your web app's Firebase configuration (note the addition of databaseURL)
     const firebaseConfig = {
       apiKey: "AIzaSyDGaaEqlkNdlfBpDSDojctIOrhgwMchw6M",
       authDomain: "gridwalkers-f084e.firebaseapp.com",
+      databaseURL: "https://gridwalkers-f084e-default-rtdb.firebaseio.com",  // Ensure this URL matches your project
       projectId: "gridwalkers-f084e",
-      storageBucket: "gridwalkers-f084e.appspot.com",
+      storageBucket: "gridwalkers-f084e.firebasestorage.app",
       messagingSenderId: "924068197891",
       appId: "1:924068197891:web:3dbb3dfbd07ce01f618036"
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
+    
+    // Initialize Firebase and the Realtime Database
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    
     // Generate a unique user id for this session
     const userId = "user_" + Math.random().toString(36).substr(2, 9);
     console.log("User ID:", userId);
-
+    
     /***********************
      * Global Variables
      ***********************/
     let playerMarker;  // Player's marker on the map
-    let currentPos = {lat: 40.7128, lng: -74.0060}; // Default position: New York City
+    let currentPos = {lat: 40.7128, lng: -74.0060}; // Default: New York City
     let inventory = [];
-
-    // Dummy arrays for safe zones and buildings (in a full implementation, these come from OSM or custom queries)
+    
+    // Dummy arrays for safe zones and buildings
     const safeZones = [
       {lat: 40.7138, lng: -74.0050, type: "Fire Station"},
       {lat: 40.7120, lng: -74.0070, type: "Police Station"},
       {lat: 40.7130, lng: -74.0045, type: "Church"},
       {lat: 40.7115, lng: -74.0065, type: "Park"}
     ];
-
+    
     const buildings = [
       {lat: 40.7132, lng: -74.0065, name: "Building A"},
       {lat: 40.7125, lng: -74.0055, name: "Building B"},
       {lat: 40.7129, lng: -74.0072, name: "Building C"}
     ];
-
+    
     /***********************
      * Initialize Map with Leaflet
      ***********************/
@@ -86,36 +115,36 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
     console.log("Map initialized", map);
-
-    // Create player marker and add to map
+    
+    // Create player marker and add it to the map
     function createPlayerMarker(lat, lng) {
       if (playerMarker) map.removeLayer(playerMarker);
       playerMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
     }
     createPlayerMarker(currentPos.lat, currentPos.lng);
-
-    // Save player's current position in Firebase
+    
+    // Update player's current position and store it to Firebase
     function updatePlayerPosition(lat, lng) {
       currentPos = {lat, lng};
       createPlayerMarker(lat, lng);
-      db.ref('players/' + userId).set({
+      set(ref(db, 'players/' + userId), {
         location: currentPos,
         inventory: inventory,
         timestamp: Date.now()
       });
       console.log("Player position updated:", currentPos);
     }
-
-    // Allow user to set spawn point by clicking on the map (for this prototype, any click moves player)
+    
+    // Listen for map clicks to update player position and check nearby features
     map.on('click', function(e) {
       console.log("Map clicked at:", e.latlng);
       updatePlayerPosition(e.latlng.lat, e.latlng.lng);
       checkNearbySafeZones(e.latlng);
       checkNearbyPlayers(e.latlng);
     });
-
+    
     /***********************
-     * Safe Zones & Buildings
+     * Render Safe Zones & Buildings
      ***********************/
     safeZones.forEach(zone => {
       const icon = L.divIcon({
@@ -124,7 +153,7 @@
       });
       L.marker([zone.lat, zone.lng], {icon: icon}).addTo(map).bindPopup(zone.type);
     });
-
+    
     buildings.forEach(bldg => {
       const marker = L.marker([bldg.lat, bldg.lng], {icon: L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png',
@@ -133,28 +162,29 @@
       })}).addTo(map);
       marker.bindPopup(bldg.name + "<br/><button onclick='lootBuilding(\"" + bldg.name + "\")'>Loot</button>");
     });
-
-    // Function called when a building is looted
-    function lootBuilding(buildingName) {
+    
+    // Handle building looting
+    window.lootBuilding = function(buildingName) {
       const lootItems = ["Old Gun", "Ammo Box", "Medkit", "Rare Key", "Empty Bottle"];
       const loot = lootItems[Math.floor(Math.random() * lootItems.length)];
       inventory.push({building: buildingName, item: loot});
       updateInventoryDisplay();
       showNotification("Looted " + loot + " from " + buildingName);
-      db.ref('players/' + userId + '/inventory').set(inventory);
-    }
-
-    // Function to update the inventory display
+      set(ref(db, 'players/' + userId + '/inventory'), inventory);
+    };
+    
+    // Update the inventory display area
     function updateInventoryDisplay() {
       document.getElementById("inventoryList").innerText = inventory.map(i => i.item).join(", ") || "Empty";
     }
-
+    
+    // Clear inventory on button click
     document.getElementById("clearInv").addEventListener("click", function(){
       inventory = [];
       updateInventoryDisplay();
-      db.ref('players/' + userId + '/inventory').set(inventory);
+      set(ref(db, 'players/' + userId + '/inventory'), inventory);
     });
-
+    
     /***********************
      * Zombie Spawns
      ***********************/
@@ -170,41 +200,43 @@
         iconAnchor: [16, 16]
       })}).addTo(map);
       zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(this, " + zombieLat + ", " + zombieLng + ")'>Attack</button>");
+      // Remove zombie marker after 30 seconds
       setTimeout(() => { map.removeLayer(zombieMarker); }, 30000);
     }
-
-    function defeatZombie(button, lat, lng) {
+    
+    window.defeatZombie = function(button, lat, lng) {
       map.closePopup();
       const zombieLoot = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
       const loot = zombieLoot[Math.floor(Math.random() * zombieLoot.length)];
       inventory.push({source: "Zombie", item: loot});
       updateInventoryDisplay();
       showNotification("Defeated zombie and looted: " + loot);
-    }
-
+    };
+    
     // Spawn a zombie every 30 seconds
     setInterval(spawnZombie, 30000);
-
+    
     /***********************
-     * Player Proximity & Notifications
+     * Safe Zones & Nearby Players
      ***********************/
     function checkNearbySafeZones(latlng) {
       safeZones.forEach(zone => {
-        let dist = map.distance(latlng, L.latLng(zone.lat, zone.lng));
+        const dist = map.distance(latlng, L.latLng(zone.lat, zone.lng));
         if (dist < 30) {
           showNotification("You are within a safe zone (" + zone.type + "). You can rest and trade here.");
         }
       });
     }
-
+    
     function checkNearbyPlayers(latlng) {
-      db.ref('players').once('value', snapshot => {
+      // Retrieve all players from the database once
+      get(ref(db, 'players')).then(snapshot => {
         let playersFound = [];
         snapshot.forEach(childSnap => {
           const p = childSnap.val();
           if (childSnap.key !== userId && p.location) {
-            let dist = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
-            if(dist < 50) playersFound.push(childSnap.key);
+            const dist = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
+            if (dist < 50) playersFound.push(childSnap.key);
           }
         });
         if (playersFound.length > 0) {
@@ -212,27 +244,29 @@
         }
       });
     }
-
+    
+    // Display notifications to the user
     function showNotification(message) {
       const notifDiv = document.getElementById("notif");
       notifDiv.innerText = message;
       setTimeout(() => { notifDiv.innerText = ""; }, 5000);
     }
-
+    
     /***********************
      * Firebase Player Sync (Live Updates)
      ***********************/
-    db.ref('players').on('value', snapshot => {
+    onValue(ref(db, 'players'), (snapshot) => {
       snapshot.forEach(childSnap => {
         const p = childSnap.val();
         if (childSnap.key !== userId && p.location) {
-          let dist = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
+          const dist = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
           if (dist < 50) {
             showNotification("Player " + childSnap.key + " is close by on your road!");
           }
         }
       });
     });
+    
   </script>
 </body>
 </html>

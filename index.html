@@ -12,7 +12,7 @@
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
     
-    /* Top Control Bar (for Search) */
+    /* Top Control Bar */
     #searchBar {
       position: absolute;
       top: 5px;
@@ -21,11 +21,10 @@
       background: rgba(255,255,255,0.9);
       padding: 6px;
       border-radius: 4px;
-      font-family: Arial, sans-serif;
     }
     #searchBar button, #searchBar input { margin: 2px; font-size: 12px; }
     
-    /* Road List Panel (for debugging display) */
+    /* Road List Panel (for debugging) */
     #roadList {
       position: absolute;
       top: 60px;
@@ -90,7 +89,7 @@
       color: #fff;
       flex-direction: column;
     }
-    /* GRIDWALKERS header in bold, non-cursive */
+    /* GRIDWALKERS in bold, non-cursive */
     #loginOverlay h1 {
       font-family: Arial, sans-serif;
       font-weight: bold;
@@ -107,16 +106,10 @@
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
     
-    /* Player Sprite: 3 Stacked Squares (Flesh, Blue, Black) */
-    .player-sprite {
-      display: inline-block;
-    }
+    /* Player Sprite: 3 Stacked Squares */
+    .player-sprite { display: inline-block; }
     .player-sprite > div {
-      width: 6px;
-      height: 6px;
-      margin: 0;
-      padding: 0;
-      line-height: 6px;
+      width: 6px; height: 6px; margin: 0; padding: 0; line-height: 6px;
     }
     .player-head { background: #f1c27d; }
     .player-torso { background: blue; }
@@ -151,7 +144,7 @@
   <!-- Map Container -->
   <div id="map"></div>
   
-  <!-- Road List Panel (for debugging) -->
+  <!-- Road List Panel (Debugging) -->
   <div id="roadList">
     <h3>
       Road List
@@ -172,10 +165,10 @@
      ***********************/
     var playerMarker = null, spawnPoint = null;
     var playerHealth = 100, playerScore = 0;
-    var equippedItem = null;  // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
+    var equippedItem = null; // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
     var backpack = []; // max 20 items
     var map, drawnItems, gridBox, roadPolylines = [];
-    // For login/profile (using localStorage)
+    
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
       return profiles ? JSON.parse(profiles) : {};
@@ -191,6 +184,7 @@
     document.getElementById("registerBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
+      console.log("Register clicked:", username, password);
       if (!username || !password) { alert("Please provide username and password."); return; }
       var profiles = loadProfiles();
       if (profiles[username]) { alert("Username exists. Choose another."); return; }
@@ -198,9 +192,11 @@
       saveProfiles(profiles);
       alert("Registration successful! Now log in.");
     });
+    
     document.getElementById("loginBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
+      console.log("Login clicked:", username, password);
       if (!username || !password) { alert("Provide username and password."); return; }
       var profiles = loadProfiles();
       if (!profiles[username]) { alert("No such user. Register first."); return; }
@@ -211,10 +207,15 @@
       equippedItem = state.equipped; backpack = state.backpack;
       spawnPoint = state.spawnPoint;
       updateStatusDisplay();
+      console.log("Login successful, initializing map. Spawn point:", spawnPoint);
       document.getElementById("loginOverlay").style.display = "none";
       initMap();
-      if (spawnPoint) { spawnPlayerAt(spawnPoint.lat, spawnPoint.lon); map.setView([spawnPoint.lat, spawnPoint.lon], 18); }
+      if (spawnPoint) { 
+        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon); 
+        map.setView([spawnPoint.lat, spawnPoint.lon], 18); 
+      }
     });
+    
     function saveState() {
       if (!currentUser) return;
       var profiles = loadProfiles();
@@ -223,14 +224,13 @@
     }
     
     /***********************
-     * INIT MAP & DRAW CONTROL (Road List)
+     * INIT MAP & DRAW CONTROL
      ***********************/
     function initMap() {
       map = L.map('map').setView([36.85, -87.55], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-      // Add draw control for grid box (RHQC)
       drawnItems = new L.FeatureGroup(); map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
         draw: {
@@ -299,7 +299,7 @@
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
-      var speed = 20; // m/s
+      var speed = 20;
       var duration = Math.max((totalDistance / speed) * 1000, 500);
       var startTime = null;
       function animate(timestamp) {
@@ -308,19 +308,16 @@
         if (progress > 1) progress = 1;
         var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
-        // Update the same playerMarker reference.
         playerMarker.setLatLng([newLat, newLng]);
         updateMoveIndicator();
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else { saveState(); }
+        if (progress < 1) { requestAnimationFrame(animate); } else { saveState(); }
       }
       requestAnimationFrame(animate);
       map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
     }
     
     /***********************
-     * HELPER FUNCTIONS (Distance, Destination, etc.)
+     * HELPER FUNCTIONS (Distance & Destination)
      ***********************/
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
@@ -343,7 +340,6 @@
       var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
-    // RHQC Code calculation (unchanged)
     function getRHQCCode(lat, lng, bounds, maxLevel) {
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
@@ -351,19 +347,10 @@
         var south = currentBounds[0][0], west = currentBounds[0][1],
             north = currentBounds[1][0], east = currentBounds[1][1];
         var midLat = (south + north) / 2, midLng = (west + east) / 2;
-        if (lat >= midLat && lng <= midLng) {
-          code += "1";
-          currentBounds = [[midLat, west], [north, midLng]];
-        } else if (lat >= midLat && lng > midLng) {
-          code += "2";
-          currentBounds = [[midLat, midLng], [north, east]];
-        } else if (lat < midLat && lng <= midLng) {
-          code += "3";
-          currentBounds = [[south, west], [midLat, midLng]];
-        } else {
-          code += "4";
-          currentBounds = [[south, midLng], [midLat, east]];
-        }
+        if (lat >= midLat && lng <= midLng) { code += "1"; currentBounds = [[midLat, west], [north, midLng]]; }
+        else if (lat >= midLat && lng > midLng) { code += "2"; currentBounds = [[midLat, midLng], [north, east]]; }
+        else if (lat < midLat && lng <= midLng) { code += "3"; currentBounds = [[south, west], [midLat, midLng]]; }
+        else { code += "4"; currentBounds = [[south, midLng], [midLat, east]]; }
       }
       return code;
     }
@@ -373,26 +360,17 @@
      ***********************/
     var roadPolylines = [];
     function fetchAndDisplayRoads() {
-      if (!gridBox) {
-        document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
-        return;
-      }
+      if (!gridBox) { document.getElementById("roadsContainer").innerHTML = "No grid box defined."; return; }
       var bounds = gridBox.getBounds();
       var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
       var bbox = south + "," + west + "," + north + "," + east;
       var query = `[out:json][timeout:25];
         ( way["highway"](${bbox}); );
         out geom;`;
-      fetch("https://overpass-api.de/api/interpreter", {
-        method:"POST",
-        body: "data=" + encodeURIComponent(query)
-      })
+      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body: "data=" + encodeURIComponent(query) })
       .then(response => response.json())
       .then(data => processRoadData(data.elements, bounds))
-      .catch(error => {
-        console.error("Error fetching roads:", error);
-        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
-      });
+      .catch(error => { console.error("Error fetching roads:", error); document.getElementById("roadsContainer").innerHTML = "Error loading roads."; });
     }
     function processRoadData(elements, gridBounds) {
       var roads = [];
@@ -432,20 +410,15 @@
     });
     
     /***********************
-     * ZOMBIE SPAWNING & AI
+     * ZOMBIE SPAWNING & AI (unchanged)
      ***********************/
-    // Spawning every 30s at 100-200m from player.
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
       var distance = 100 + Math.random() * 100;
       var angle = Math.random() * 360;
       var spawn = destinationPoint(playerPos.lat, playerPos.lng, angle, distance);
-      var zombieIcon = L.divIcon({
-        html: createZombieHTML(),
-        iconSize: [6,18],
-        className: ''
-      });
+      var zombieIcon = L.divIcon({ html: createZombieHTML(), iconSize: [6,18], className: '' });
       var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
       marker.addTo(zombieLayer).bindPopup("Zombie!");
       marker.zombieHealth = 3;
@@ -527,7 +500,7 @@
     });
     
     /***********************
-     * LOOT SYSTEM: Buildings & Loot Boxes with 5-min Cooldown
+     * LOOT SYSTEM: Buildings & Loot Boxes (5-min Cooldown)
      ***********************/
     var lootCooldowns = {};
     function fetchBuildingsAndSpawnLoot() {
@@ -554,7 +527,7 @@
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("You looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
+              alert("Looted: " + loot.name + (loot.type==="ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
               lootCooldowns[key] = Date.now() + (5 * 60 * 1000);
               saveState();
@@ -606,8 +579,8 @@
      ***********************/
     setInterval(updateZombies, 1000);
     
-    /* MULTIPLAYER PLACEHOLDER */
-    // TODO: Integrate real-time backend so players within 1000m can see one another.
+    /* MULTIPLAYER PLACEHOLDER - TODO */
+    
   </script>
 </body>
 </html>

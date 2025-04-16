@@ -8,11 +8,11 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
-    /* Basic Reset and Fonts */
+    /* Base Styles */
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 60px; }
     
-    /* Top Control Bar (Search) */
+    /* Top Control Bar */
     #searchBar {
       position: absolute;
       top: 5px;
@@ -27,7 +27,7 @@
       font-size: 12px;
     }
     
-    /* Status Display (Top Right) */
+    /* Status Display */
     #statusDisplay {
       position: absolute;
       top: 5px;
@@ -39,7 +39,7 @@
       font-size: 12px;
     }
     
-    /* Left Sidebar for Inventory Icons */
+    /* Left Sidebar with Collapsible Inventory Icons */
     #leftSidebar {
       position: absolute;
       top: 0;
@@ -127,6 +127,7 @@
       color: #fff;
       flex-direction: column;
     }
+    /* GRIDWALKERS in Bold, non-cursive */
     #loginOverlay h1 {
       font-family: Arial, sans-serif;
       font-weight: bold;
@@ -171,14 +172,14 @@
     .zombie-torso { background: brown; }
     .zombie-boots { background: green; }
     
-    /* Movement Radius Indicator for Player */
+    /* Movement Radius Indicator */
     .move-radius {
       fill: rgba(0,0,255,0.1);
       stroke: blue;
       stroke-width: 1;
     }
     
-    /* Loot Box Marker Style */
+    /* Loot Box Style */
     .loot-box {
       width: 10px;
       height: 10px;
@@ -203,7 +204,7 @@
     </form>
   </div>
   
-  <!-- Left Sidebar -->
+  <!-- Left Sidebar with Inventory Icons -->
   <div id="leftSidebar">
     <div id="equippedIcon" class="inv-icon" title="Equipped">EQ</div>
     <div id="backpackIcon" class="inv-icon" title="Backpack">BP</div>
@@ -251,22 +252,16 @@
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script>
-    /***********************
+    /* =====================================================
      * GLOBAL STATE VARIABLES & PROFILE HANDLING
-     ***********************/
+     * ===================================================== */
     var playerMarker = null;
     var spawnPoint = null;
-    var playerHealth = 100;
-    var playerScore = 0;
+    var playerHealth = 100, playerScore = 0;
     var equippedItem = null; // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
-    var backpack = []; // Array of loot items (max 20)
-    
-    var zombieLayer = L.layerGroup();
-    var zombieMarkers = []; // Each zombie: { marker, zombieHealth }
-    
-    var lootLayer = L.layerGroup();
-    var lootCooldowns = {}; // Keyed by building lat_lng
-    
+    var backpack = []; // Array (max 20)
+    var zombieLayer = L.layerGroup(), zombieMarkers = []; // Each zombie: { marker, zombieHealth }
+    var lootLayer = L.layerGroup(), lootCooldowns = {};
     var map, drawnItems, gridBox, roadPolylines = [];
     
     function loadProfiles() {
@@ -278,193 +273,128 @@
     }
     var currentUser = null;
     
-    /***********************
+    /* =====================================================
      * LOGIN FUNCTIONALITY
-     ***********************/
+     * ===================================================== */
     document.getElementById("registerBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
-      if (!username || !password) {
-        alert("Please provide a username and password.");
-        return;
-      }
+      if (!username || !password) { alert("Provide username and password."); return; }
       var profiles = loadProfiles();
-      if (profiles[username]) {
-        alert("Username already exists. Choose a different one.");
-        return;
-      }
-      profiles[username] = {
-        password: password,
-        state: { health: 100, score: 0, equipped: null, backpack: [], spawnPoint: null }
-      };
+      if (profiles[username]) { alert("Username exists."); return; }
+      profiles[username] = { password: password, state: { health: 100, score: 0, equipped: null, backpack: [], spawnPoint: null } };
       saveProfiles(profiles);
-      alert("Registration successful! You can now log in.");
+      alert("Registration successful! Now log in.");
     });
     document.getElementById("loginBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
-      if (!username || !password) {
-        alert("Please provide a username and password.");
-        return;
-      }
+      if (!username || !password) { alert("Provide username and password."); return; }
       var profiles = loadProfiles();
-      if (!profiles[username]) {
-        alert("No such user. Please register.");
-        return;
-      }
-      if (profiles[username].password !== password) {
-        alert("Incorrect password.");
-        return;
-      }
+      if (!profiles[username]) { alert("No such user."); return; }
+      if (profiles[username].password !== password) { alert("Incorrect password."); return; }
       currentUser = username;
       var state = profiles[username].state;
-      playerHealth = state.health;
-      playerScore = state.score;
-      equippedItem = state.equipped;
-      backpack = state.backpack;
+      playerHealth = state.health; playerScore = state.score;
+      equippedItem = state.equipped; backpack = state.backpack;
       spawnPoint = state.spawnPoint;
-      updateStatusDisplay();
-      updateInventoryUI();
+      updateStatusDisplay(); updateInventoryUI();
       document.getElementById("loginOverlay").style.display = "none";
       initMap();
-      if (spawnPoint) {
-        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
-        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
-      }
+      if (spawnPoint) { spawnPlayerAt(spawnPoint.lat, spawnPoint.lon); map.setView([spawnPoint.lat, spawnPoint.lon], 18); }
     });
     function saveState() {
       if (!currentUser) return;
       var profiles = loadProfiles();
-      profiles[currentUser].state = {
-        health: playerHealth, score: playerScore,
-        equipped: equippedItem, backpack: backpack, spawnPoint: spawnPoint
-      };
+      profiles[currentUser].state = { health: playerHealth, score: playerScore, equipped: equippedItem, backpack: backpack, spawnPoint: spawnPoint };
       saveProfiles(profiles);
     }
     
-    /***********************
-     * LEFT SIDEBAR MODAL TOGGLING
-     ***********************/
+    /* =====================================================
+     * LEFT SIDEBAR MODALS (Inventory)
+     * ===================================================== */
     function toggleModal(modalId) {
       var modal = document.getElementById(modalId);
       modal.style.display = (modal.style.display === "block") ? "none" : "block";
     }
     document.getElementById("equippedIcon").addEventListener("click", function() {
-      toggleModal("equippedModal");
-      updateEquippedModal();
+      toggleModal("equippedModal"); updateEquippedModal();
     });
     document.getElementById("backpackIcon").addEventListener("click", function() {
-      toggleModal("backpackModal");
-      updateBackpackModal();
+      toggleModal("backpackModal"); updateBackpackModal();
     });
-    function updateEquippedModal() {
-      document.getElementById("equippedContent").textContent = equippedItem ? equippedItem.name : "None";
-    }
+    function updateEquippedModal() { document.getElementById("equippedContent").textContent = (equippedItem ? equippedItem.name : "None"); }
     function updateBackpackModal() {
-      var backpackContent = document.getElementById("backpackContent");
-      backpackContent.innerHTML = "";
+      var backpackContent = document.getElementById("backpackContent"); backpackContent.innerHTML = "";
       backpack.forEach(function(item, idx) {
         var itemDiv = document.createElement("div");
         itemDiv.className = "inv-item";
         itemDiv.textContent = item.name + (item.type === "ammo" ? " x" + item.quantity : "");
         itemDiv.onclick = function() {
-          if (item.type === "gun") {
-            equippedItem = item;
-            alert("Equipped " + item.name);
-          } else if (item.type === "consumable") {
-            if (item.effect === "heal") {
-              playerHealth += item.amount; if (playerHealth > 100) playerHealth = 100;
-              alert("Consumed " + item.name + ". Healed " + item.amount);
-              backpack.splice(idx, 1);
-            }
-          }
-          updateInventoryUI();
-          updateStatusDisplay();
-          saveState();
-          updateBackpackModal();
-          updateEquippedModal();
+          if (item.type === "gun") { equippedItem = item; alert("Equipped " + item.name); }
+          else if (item.type === "consumable") { if (item.effect === "heal") { playerHealth += item.amount; if (playerHealth > 100) playerHealth = 100; alert("Consumed " + item.name); backpack.splice(idx, 1); } }
+          updateInventoryUI(); updateStatusDisplay(); saveState(); updateBackpackModal(); updateEquippedModal();
         };
         backpackContent.appendChild(itemDiv);
       });
       while (backpackContent.childNodes.length < 20) {
         var emptyDiv = document.createElement("div");
-        emptyDiv.className = "inv-item";
-        emptyDiv.style.background = "#fff";
-        emptyDiv.textContent = "";
+        emptyDiv.className = "inv-item"; emptyDiv.style.background = "#fff"; emptyDiv.textContent = "";
         backpackContent.appendChild(emptyDiv);
       }
     }
     function updateInventoryUI() {
-      var equippedIcon = document.getElementById("equippedIcon");
-      equippedIcon.textContent = equippedItem ? equippedItem.name.substring(0,2).toUpperCase() : "EQ";
-      var backpackIcon = document.getElementById("backpackIcon");
-      backpackIcon.textContent = backpack.length;
+      document.getElementById("equippedIcon").textContent = (equippedItem ? equippedItem.name.substring(0,2).toUpperCase() : "EQ");
+      document.getElementById("backpackIcon").textContent = backpack.length;
     }
     
-    /***********************
-     * INIT MAP & RHQC ELEMENTS
-     ***********************/
+    /* =====================================================
+     * INIT MAP & BASIC RHQC
+     * ===================================================== */
     function initMap() {
       map = L.map('map').setView([36.85, -87.55], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-      zombieLayer.addTo(map);
-      lootLayer.addTo(map);
-      
-      drawnItems = new L.FeatureGroup();
-      map.addLayer(drawnItems);
+      zombieLayer.addTo(map); lootLayer.addTo(map);
+      drawnItems = new L.FeatureGroup(); map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
-        draw: {
-          polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
-          rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } }
-        },
+        draw: { polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
+                rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } } },
         edit: { featureGroup: drawnItems, edit: true, remove: false }
       });
       map.addControl(drawControl);
       map.on(L.Draw.Event.CREATED, function(event) {
         drawnItems.clearLayers();
-        var layer = event.layer;
-        drawnItems.addLayer(layer);
-        layer.setStyle({ opacity: 0, fillOpacity: 0 });
-        gridBox = layer;
+        gridBox = event.layer;
+        gridBox.setStyle({ opacity: 0, fillOpacity: 0 });
+        drawnItems.addLayer(gridBox);
         fetchAndDisplayRoads();
       });
       map.on('draw:edited', function(e) {
         gridBox = drawnItems.getLayers()[0];
         fetchAndDisplayRoads();
       });
-      
       document.getElementById("searchBtn").addEventListener("click", function() {
         var address = document.getElementById("addressInput").value;
         if (!address) return;
         var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(address);
-        fetch(url)
-          .then(response => response.json())
-          .then(data => {
-            if (data.length > 0) {
-              var lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
-              map.setView([lat, lon], 18);
-              spawnPlayerAt(lat, lon);
-              saveState();
-            } else {
-              alert("Location not found!");
-            }
-          });
+        fetch(url).then(resp => resp.json()).then(data => {
+          if (data.length > 0) {
+            var lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+            map.setView([lat, lon], 18);
+            spawnPlayerAt(lat, lon); saveState();
+          } else { alert("Location not found!"); }
+        });
       });
-      
       map.on('click', function(e) {
-        if (!playerMarker) return;
-        animatePlayerMove(e.latlng.lat, e.latlng.lng);
+        if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
       });
-      
-      // Multiplayer placeholder: TODO - integrate real-time backend.
     }
     
-    /***********************
-     * PLAYER SPAWN & MOVEMENT
-     ***********************/
+    /* =====================================================
+     * PLAYER MOVEMENT
+     * ===================================================== */
     function createPlayerHTML() {
       return '<div class="player-sprite">' +
                '<div class="player-head"></div>' +
@@ -475,15 +405,10 @@
     function spawnPlayerAt(lat, lon) {
       if (playerMarker) { map.removeLayer(playerMarker); }
       playerMarker = L.marker([lat, lon], {
-        icon: L.divIcon({
-          className: '',
-          html: createPlayerHTML(),
-          iconSize: [6, 18]
-        })
+        icon: L.divIcon({ className: '', html: createPlayerHTML(), iconSize: [6, 18] })
       }).addTo(map).bindPopup("You");
       spawnPoint = { lat: lat, lon: lon };
-      updateMoveIndicator();
-      saveState();
+      updateMoveIndicator(); saveState();
     }
     function updateMoveIndicator() {
       if (moveIndicator) { map.removeLayer(moveIndicator); }
@@ -505,63 +430,48 @@
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         playerMarker.setLatLng([newLat, newLng]);
         updateMoveIndicator();
-        if (progress < 1) { requestAnimationFrame(animate); }
-        else { saveState(); }
+        if (progress < 1) { requestAnimationFrame(animate); } else { saveState(); }
       }
       requestAnimationFrame(animate);
       map.panTo([targetLat, targetLng], { animate: true, duration: duration/1000 });
     }
     
-    /***********************
-     * HELPER FUNCTIONS (Distance & Destination)
-     ***********************/
+    /* =====================================================
+     * HELPER FUNCTIONS: Distance & Destination
+     * ===================================================== */
     function toRad(value) { return value * Math.PI / 180; }
     function toDeg(rad) { return rad * 180 / Math.PI; }
     function getDistanceMeters(lat1, lon1, lat2, lon2) {
       var R = 6371000;
-      var dLat = toRad(lat2 - lat1);
-      var dLon = toRad(lon2 - lon1);
-      var a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
-      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      var dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+      var a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       return R * c;
     }
     function destinationPoint(lat, lon, bearing, distance) {
       var R = 6371000;
-      var δ = distance / R;
-      var θ = toRad(bearing);
-      var φ1 = toRad(lat);
-      var λ1 = toRad(lon);
-      var φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+      var δ = distance / R, θ = toRad(bearing);
+      var φ1 = toRad(lat), λ1 = toRad(lon);
+      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
     
-    /***********************
+    /* =====================================================
      * FETCH ROADS (Overpass API)
-     ***********************/
+     * ===================================================== */
     function fetchAndDisplayRoads() {
-      if (!gridBox) {
-        document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
-        return;
-      }
+      if (!gridBox) { document.getElementById("roadsContainer").innerHTML = "No grid box defined."; return; }
       var bounds = gridBox.getBounds();
       var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
       var bbox = south + "," + west + "," + north + "," + east;
       var query = `[out:json][timeout:25];
-        (
-          way["highway"](${bbox});
-        );
+        ( way["highway"](${bbox}); );
         out geom;`;
-      fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: "data=" + encodeURIComponent(query)
-      })
+      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body: "data=" + encodeURIComponent(query) })
       .then(response => response.json())
       .then(data => processRoadData(data.elements, bounds))
-      .catch(error => {
-        console.error("Error fetching roads:", error);
-        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
-      });
+      .catch(error => { console.error("Error fetching roads:", error); document.getElementById("roadsContainer").innerHTML = "Error loading roads."; });
     }
     function processRoadData(elements, gridBounds) {
       var roads = [];
@@ -574,9 +484,9 @@
         }
       });
       var html = "";
-      roads.sort((a, b) => a.name.localeCompare(b.name));
+      roads.sort((a,b)=>a.name.localeCompare(b.name));
       roads.forEach(function(road) {
-        var mid = road.polyline[Math.floor(road.polyline.length / 2)];
+        var mid = road.polyline[Math.floor(road.polyline.length/2)];
         var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
         html += "<div class='road-item'><span class='road-code'>" + code + "</span> " + road.name + "</div>";
       });
@@ -591,11 +501,11 @@
         item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
       });
     }
-    document.getElementById("toggleRoadListBtn").addEventListener("click", function() {
+    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
       document.getElementById("roadList").style.display = "none";
       document.getElementById("roadListToggle").style.display = "block";
     });
-    document.getElementById("roadListToggle").addEventListener("click", function() {
+    document.getElementById("roadListToggle").addEventListener("click", function(){
       document.getElementById("roadList").style.display = "block";
       document.getElementById("roadListToggle").style.display = "none";
     });
@@ -603,41 +513,27 @@
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
       for (var level = 1; level <= maxLevel; level++) {
-        var south = currentBounds[0][0], west = currentBounds[0][1],
-            north = currentBounds[1][0], east = currentBounds[1][1];
+        var south = currentBounds[0][0], west = currentBounds[0][1], north = currentBounds[1][0], east = currentBounds[1][1];
         var midLat = (south + north) / 2, midLng = (west + east) / 2;
-        if (lat >= midLat && lng <= midLng) {
-          code += "1";
-          currentBounds = [[midLat, west], [north, midLng]];
-        } else if (lat >= midLat && lng > midLng) {
-          code += "2";
-          currentBounds = [[midLat, midLng], [north, east]];
-        } else if (lat < midLat && lng <= midLng) {
-          code += "3";
-          currentBounds = [[south, west], [midLat, midLng]];
-        } else {
-          code += "4";
-          currentBounds = [[south, midLng], [midLat, east]];
-        }
+        if (lat >= midLat && lng <= midLng) { code += "1"; currentBounds = [[midLat, west], [north, midLng]]; }
+        else if (lat >= midLat && lng > midLng) { code += "2"; currentBounds = [[midLat, midLng], [north, east]]; }
+        else if (lat < midLat && lng <= midLng) { code += "3"; currentBounds = [[south, west], [midLat, midLng]]; }
+        else { code += "4"; currentBounds = [[south, midLng], [midLat, east]]; }
       }
       return code;
     }
     
-    /***********************
+    /* =====================================================
      * ZOMBIE SPAWNING & AI
-     ***********************/
-    // Zombies spawn every 30 seconds at a random distance between 100m and 200m from the player.
+     * ===================================================== */
+    // Spawn zombies every 30 seconds at 100-200m from the player.
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
       var distance = 100 + Math.random() * 100;
       var angle = Math.random() * 360;
       var spawn = destinationPoint(playerPos.lat, playerPos.lng, angle, distance);
-      var zombieIcon = L.divIcon({
-        html: createZombieHTML(),
-        iconSize: [6, 18],
-        className: ''
-      });
+      var zombieIcon = L.divIcon({ html: createZombieHTML(), iconSize: [6,18], className: '' });
       var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
       marker.addTo(zombieLayer).bindPopup("Zombie!");
       marker.zombieHealth = 3;
@@ -657,30 +553,15 @@
         var zObj = zombieMarkers[i];
         var zombiePos = zObj.marker.getLatLng();
         var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
-        if (dist > 1000) {
-          zombieLayer.removeLayer(zObj.marker);
-          zombieMarkers.splice(i, 1);
-          continue;
-        }
+        if (dist > 1000) { zombieLayer.removeLayer(zObj.marker); zombieMarkers.splice(i, 1); continue; }
         var target = null, speed = 0;
-        if (dist < 50) { // Lock on when within 50m
-          target = { lat: playerPos.lat, lng: playerPos.lng };
-          speed = 18;
-        } else {
-          var wanderDist = Math.random() * 5;
-          var wanderAngle = Math.random() * 360;
-          target = destinationPoint(zombiePos.lat, zombiePos.lng, wanderAngle, wanderDist);
-          speed = 10;
-        }
+        if (dist < 50) { target = { lat: playerPos.lat, lng: playerPos.lng }; speed = 18; }
+        else { var wanderDist = Math.random() * 5, wanderAngle = Math.random() * 360; target = destinationPoint(zombiePos.lat, zombiePos.lng, wanderAngle, wanderDist); speed = 10; }
         animateZombieMove(zObj.marker, target.lat, target.lng, speed);
         if (dist < 5) {
           playerHealth -= 1;
           updateStatusDisplay();
-          if (playerHealth <= 0) {
-            alert("You have been overwhelmed by zombies!");
-            resetGame();
-            return;
-          }
+          if (playerHealth <= 0) { alert("Overwhelmed by zombies!"); resetGame(); return; }
         }
       }
     }
@@ -696,40 +577,29 @@
         var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         marker.setLatLng([newLat, newLng]);
-        if (progress < 1) { requestAnimationFrame(animate); }
+        if (progress < 1) requestAnimationFrame(animate);
       }
       requestAnimationFrame(animate);
     }
     setInterval(spawnZombie, 30000);
     setInterval(updateZombies, 1000);
     
-    /***********************
-     * ZOMBIE COMBAT: SHOOTING ON CLICK
-     ***********************/
+    /* =====================================================
+     * ZOMBIE COMBAT (Click-to-Shoot)
+     * ===================================================== */
     zombieLayer.on('click', function(e) {
-      if (!equippedItem || equippedItem.type !== "gun") {
-        alert("Equip a gun to shoot!");
-        return;
-      }
+      if (!equippedItem || equippedItem.type !== "gun") { alert("Equip a gun to shoot!"); return; }
       var clickedMarker = e.layer;
       for (var i = 0; i < zombieMarkers.length; i++) {
         if (zombieMarkers[i].marker === clickedMarker) {
           var playerPos = playerMarker.getLatLng();
           var zombiePos = clickedMarker.getLatLng();
           var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
-          if (dist > equippedItem.range) {
-            alert("Target out of range for " + equippedItem.name);
-            return;
-          }
+          if (dist > equippedItem.range) { alert("Out of range for " + equippedItem.name); return; }
           var ammoIndex = backpack.findIndex(item => item.type === "ammo");
-          if (ammoIndex < 0) {
-            alert("No ammunition!");
-            return;
-          }
+          if (ammoIndex < 0) { alert("No ammunition!"); return; }
           backpack[ammoIndex].quantity--;
-          if (backpack[ammoIndex].quantity <= 0) {
-            backpack.splice(ammoIndex, 1);
-          }
+          if (backpack[ammoIndex].quantity <= 0) { backpack.splice(ammoIndex, 1); }
           clickedMarker.zombieHealth -= equippedItem.damage;
           if (clickedMarker.zombieHealth <= 0) {
             zombieLayer.removeLayer(clickedMarker);
@@ -744,9 +614,9 @@
       }
     });
     
-    /***********************
-     * LOOT SYSTEM: Buildings & Loot Boxes with 5-Minute Cooldown
-     ***********************/
+    /* =====================================================
+     * LOOT SYSTEM: Buildings & Loot Boxes (5-min Cooldown)
+     * ===================================================== */
     function fetchBuildingsAndSpawnLoot() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
@@ -755,32 +625,23 @@
       var west = playerPos.lng - delta, east = playerPos.lng + delta;
       var bbox = south + "," + west + "," + north + "," + east;
       var query = `[out:json][timeout:25];
-        (
-          way["building"](${bbox});
-        );
+        ( way["building"](${bbox}); );
         out center;`;
-      fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: "data=" + encodeURIComponent(query)
-      })
+      fetch("https://overpass-api.de/api/interpreter", { method:"POST", body: "data=" + encodeURIComponent(query) })
       .then(response => response.json())
       .then(data => {
         data.elements.forEach(function(elem) {
           if (elem.center) {
             var key = elem.center.lat.toFixed(5) + "_" + elem.center.lng.toFixed(5);
             if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
-            var lootIcon = L.divIcon({
-              html: '<div class="loot-box">L</div>',
-              iconSize: [10, 10],
-              className: ''
-            });
+            var lootIcon = L.divIcon({ html: '<div class="loot-box">L</div>', iconSize: [10,10], className: '' });
             var marker = L.marker([elem.center.lat, elem.center.lng], { icon: lootIcon });
             marker.addTo(lootLayer);
             marker.on('click', function() {
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("You looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
+              alert("Looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
               lootCooldowns[key] = Date.now() + (5 * 60 * 1000);
               saveState();
@@ -801,25 +662,23 @@
       var rand = Math.random(), cumulative = 0;
       for (var i = 0; i < lootTable.length; i++) {
         cumulative += lootTable[i].chance;
-        if (rand < cumulative) {
-          return JSON.parse(JSON.stringify(lootTable[i].item));
-        }
+        if (rand < cumulative) { return JSON.parse(JSON.stringify(lootTable[i].item)); }
       }
       return { type:"ammo", name:"ammo", quantity: 5 };
     }
     setInterval(fetchBuildingsAndSpawnLoot, 30000);
     
-    /***********************
+    /* =====================================================
      * STATUS DISPLAY UPDATE
-     ***********************/
+     * ===================================================== */
     function updateStatusDisplay() {
       document.getElementById("healthDisplay").textContent = playerHealth;
       document.getElementById("scoreDisplay").textContent = playerScore;
     }
     
-    /***********************
+    /* =====================================================
      * GAME RESET
-     ***********************/
+     * ===================================================== */
     function resetGame() {
       alert("Game Over! Your score: " + playerScore);
       var profiles = loadProfiles();
@@ -829,15 +688,15 @@
     }
     window.addEventListener("beforeunload", saveState);
     
-    /***********************
+    /* =====================================================
      * UPDATE LOOP (Zombies)
-     ***********************/
+     * ===================================================== */
     setInterval(updateZombies, 1000);
     
-    /***********************
+    /* =====================================================
      * MULTIPLAYER PLACEHOLDER
-     ***********************/
-    // TODO: Integrate a real-time backend (e.g., Firebase) for multiple players within 1000m.
+     * ===================================================== */
+    // TODO: Integrate real-time backend so players within 1000m see each other.
     
   </script>
 </body>

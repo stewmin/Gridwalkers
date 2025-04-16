@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gridwalkers Sandbox Prototype</title>
+  <title>Gridwalkers Masterpiece - Full Sandbox Game</title>
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
     integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
   <style>
+    /* Basic full-screen layout for the game */
     body, html {
       margin: 0;
       padding: 0;
@@ -15,19 +16,33 @@
       font-family: sans-serif;
       background: #222;
       color: #eee;
+      overflow: hidden;
     }
     #map {
+      position: absolute;
+      top: 0;
+      bottom: 20%;
       width: 100%;
-      height: 90%;
+    }
+    #hud {
+      position: absolute;
+      bottom: 0;
+      height: 20%;
+      width: 100%;
+      background: #333;
+      color: #eee;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-y: auto;
     }
     #notif {
       padding: 5px;
-      text-align: center;
+      margin-bottom: 5px;
       background: #444;
+      text-align: center;
     }
     #inventory {
-      padding: 10px;
-      background: #333;
+      margin-bottom: 5px;
     }
     .btn {
       padding: 6px 12px;
@@ -38,69 +53,94 @@
       border: none;
       border-radius: 4px;
     }
+    #chat {
+      background: #222;
+      padding: 5px;
+      border: 1px solid #555;
+      height: 80px;
+      overflow-y: auto;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    #chatInput {
+      width: 80%;
+      padding: 4px;
+      font-size: 12px;
+    }
+    #sendChat {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <!-- Test Message -->
-  <div id="test" style="padding:10px; background:#444; text-align:center;">Gridwalkers Prototype Loaded</div>
   <!-- Map Container -->
   <div id="map"></div>
-  <!-- Notification Bar -->
-  <div id="notif">Notifications will appear here</div>
-  <!-- Inventory & Controls -->
-  <div id="inventory">
-    <strong>Inventory:</strong>
-    <span id="inventoryList">Empty</span>
-    <button id="clearInv" class="btn">Clear Inventory</button>
+  
+  <!-- Heads-Up Display -->
+  <div id="hud">
+    <!-- Notification area -->
+    <div id="notif">Notifications will appear here</div>
+    <!-- Inventory display -->
+    <div id="inventory">
+      <strong>Inventory:</strong> <span id="inventoryList">Empty</span>
+      <button id="clearInv" class="btn">Clear Inventory</button>
+    </div>
+    <!-- Display player's ID -->
+    <div id="playerInfo"><strong>Player:</strong> <span id="playerId"></span></div>
+    <!-- Chat system -->
+    <div id="chat"></div>
+    <div>
+      <input type="text" id="chatInput" placeholder="Type a message..." />
+      <button id="sendChat" class="btn">Send</button>
+    </div>
   </div>
-
+  
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
     integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
   
-  <!-- Our main script using Firebase modular SDK -->
+  <!-- Main Script (using Firebase modular SDK) -->
   <script type="module">
-    // Import Firebase modules from the CDN
+    // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
+    import { getDatabase, ref, set, onValue, push, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
     
     /***********************
      * Firebase Setup
      ***********************/
-    // Your web app's Firebase configuration (note the addition of databaseURL)
     const firebaseConfig = {
       apiKey: "AIzaSyDGaaEqlkNdlfBpDSDojctIOrhgwMchw6M",
       authDomain: "gridwalkers-f084e.firebaseapp.com",
-      databaseURL: "https://gridwalkers-f084e-default-rtdb.firebaseio.com",  // Ensure this URL matches your project
+      databaseURL: "https://gridwalkers-f084e-default-rtdb.firebaseio.com",
       projectId: "gridwalkers-f084e",
-      storageBucket: "gridwalkers-f084e.firebasestorage.app",
+      storageBucket: "gridwalkers-f084e.appspot.com",
       messagingSenderId: "924068197891",
       appId: "1:924068197891:web:3dbb3dfbd07ce01f618036"
     };
-    
-    // Initialize Firebase and the Realtime Database
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
-    // Generate a unique user id for this session
+    // Generate a unique user id (for production, you’d use proper authentication)
     const userId = "user_" + Math.random().toString(36).substr(2, 9);
     console.log("User ID:", userId);
+    document.getElementById("playerId").innerText = userId;
     
     /***********************
-     * Global Variables
+     * Global Variables & Game State
      ***********************/
-    let playerMarker;  // Player's marker on the map
-    let currentPos = {lat: 40.7128, lng: -74.0060}; // Default: New York City
+    let playerMarker;  // Player's marker object
+    let currentPos = {lat: 40.7128, lng: -74.0060}; // Default starting position (New York City)
     let inventory = [];
+    let zombies = [];  // Array for zombie markers (for extended game logic)
     
-    // Dummy arrays for safe zones and buildings
+    // Dummy data for safe zones and lootable buildings (these can come from OSM in a full version)
     const safeZones = [
       {lat: 40.7138, lng: -74.0050, type: "Fire Station"},
       {lat: 40.7120, lng: -74.0070, type: "Police Station"},
       {lat: 40.7130, lng: -74.0045, type: "Church"},
       {lat: 40.7115, lng: -74.0065, type: "Park"}
     ];
-    
     const buildings = [
       {lat: 40.7132, lng: -74.0065, name: "Building A"},
       {lat: 40.7125, lng: -74.0055, name: "Building B"},
@@ -114,56 +154,61 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
-    console.log("Map initialized", map);
+    console.log("Map initialized.");
     
-    // Create player marker and add it to the map
+    // Create a marker for the player
     function createPlayerMarker(lat, lng) {
-      if (playerMarker) map.removeLayer(playerMarker);
+      if (playerMarker) {
+        map.removeLayer(playerMarker);
+      }
       playerMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
     }
     createPlayerMarker(currentPos.lat, currentPos.lng);
     
-    // Update player's current position and store it to Firebase
+    // Update player position and store it to Firebase
     function updatePlayerPosition(lat, lng) {
       currentPos = {lat, lng};
       createPlayerMarker(lat, lng);
       set(ref(db, 'players/' + userId), {
         location: currentPos,
         inventory: inventory,
-        timestamp: Date.now()
+        timestamp: serverTimestamp()
       });
       console.log("Player position updated:", currentPos);
     }
     
-    // Listen for map clicks to update player position and check nearby features
-    map.on('click', function(e) {
+    // Listen for map clicks to set a new player position
+    map.on('click', (e) => {
       console.log("Map clicked at:", e.latlng);
       updatePlayerPosition(e.latlng.lat, e.latlng.lng);
-      checkNearbySafeZones(e.latlng);
+      checkSafeZones(e.latlng);
       checkNearbyPlayers(e.latlng);
     });
     
     /***********************
-     * Render Safe Zones & Buildings
+     * Render Safe Zones and Buildings
      ***********************/
+    // Render safe zones as green circle markers
     safeZones.forEach(zone => {
-      const icon = L.divIcon({
-        html: `<div style="background: #0a0; border-radius: 50%; width: 20px; height: 20px; text-align:center; line-height:20px; color:#fff;">${zone.type.charAt(0)}</div>`,
+      const safeIcon = L.divIcon({
+        html: `<div style="background: #0a0; border-radius: 50%; width: 20px; height: 20px; text-align: center; line-height: 20px; color: #fff;">${zone.type.charAt(0)}</div>`,
         className: ''
       });
-      L.marker([zone.lat, zone.lng], {icon: icon}).addTo(map).bindPopup(zone.type);
+      L.marker([zone.lat, zone.lng], {icon: safeIcon}).addTo(map).bindPopup(zone.type);
     });
     
+    // Render buildings as lootable zones with a building icon
     buildings.forEach(bldg => {
-      const marker = L.marker([bldg.lat, bldg.lng], {icon: L.icon({
+      const buildingIcon = L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
-      })}).addTo(map);
+      });
+      const marker = L.marker([bldg.lat, bldg.lng], {icon: buildingIcon}).addTo(map);
       marker.bindPopup(bldg.name + "<br/><button onclick='lootBuilding(\"" + bldg.name + "\")'>Loot</button>");
     });
     
-    // Handle building looting
+    // Expose lootBuilding globally (for inline popup calls)
     window.lootBuilding = function(buildingName) {
       const lootItems = ["Old Gun", "Ammo Box", "Medkit", "Rare Key", "Empty Bottle"];
       const loot = lootItems[Math.floor(Math.random() * lootItems.length)];
@@ -173,41 +218,49 @@
       set(ref(db, 'players/' + userId + '/inventory'), inventory);
     };
     
-    // Update the inventory display area
+    // Update the HUD inventory display
     function updateInventoryDisplay() {
       document.getElementById("inventoryList").innerText = inventory.map(i => i.item).join(", ") || "Empty";
     }
     
-    // Clear inventory on button click
-    document.getElementById("clearInv").addEventListener("click", function(){
+    // Clear inventory event handler
+    document.getElementById("clearInv").addEventListener("click", () => {
       inventory = [];
       updateInventoryDisplay();
       set(ref(db, 'players/' + userId + '/inventory'), inventory);
     });
     
     /***********************
-     * Zombie Spawns
+     * Zombie Mechanics
      ***********************/
+    // Spawn a zombie near the player's current position at a random offset
     function spawnZombie() {
       const latOffset = (Math.random() - 0.5) * 0.001;
       const lngOffset = (Math.random() - 0.5) * 0.001;
       const zombieLat = currentPos.lat + latOffset;
       const zombieLng = currentPos.lng + lngOffset;
       
-      const zombieMarker = L.marker([zombieLat, zombieLng], {icon: L.icon({
+      const zombieIcon = L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
-      })}).addTo(map);
-      zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(this, " + zombieLat + ", " + zombieLng + ")'>Attack</button>");
-      // Remove zombie marker after 30 seconds
-      setTimeout(() => { map.removeLayer(zombieMarker); }, 30000);
+      });
+      const zombieMarker = L.marker([zombieLat, zombieLng], {icon: zombieIcon}).addTo(map);
+      zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(\"" + zombieLat + "\", \"" + zombieLng + "\")'>Attack</button>");
+      
+      zombies.push(zombieMarker);
+      
+      // Automatically remove zombie after 30 seconds if not defeated
+      setTimeout(() => {
+        map.removeLayer(zombieMarker);
+      }, 30000);
     }
     
-    window.defeatZombie = function(button, lat, lng) {
+    // Expose defeatZombie globally for inline calls
+    window.defeatZombie = function(zombieLat, zombieLng) {
       map.closePopup();
-      const zombieLoot = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
-      const loot = zombieLoot[Math.floor(Math.random() * zombieLoot.length)];
+      const zombieLootItems = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
+      const loot = zombieLootItems[Math.floor(Math.random() * zombieLootItems.length)];
       inventory.push({source: "Zombie", item: loot});
       updateInventoryDisplay();
       showNotification("Defeated zombie and looted: " + loot);
@@ -217,50 +270,95 @@
     setInterval(spawnZombie, 30000);
     
     /***********************
-     * Safe Zones & Nearby Players
+     * Proximity Checks and Notifications
      ***********************/
-    function checkNearbySafeZones(latlng) {
+    function checkSafeZones(latlng) {
       safeZones.forEach(zone => {
-        const dist = map.distance(latlng, L.latLng(zone.lat, zone.lng));
-        if (dist < 30) {
-          showNotification("You are within a safe zone (" + zone.type + "). You can rest and trade here.");
+        const distance = map.distance(latlng, L.latLng(zone.lat, zone.lng));
+        if (distance < 30) {
+          showNotification("You are within a safe zone (" + zone.type + "). Rest, trade, or switch gear here.");
         }
       });
     }
     
     function checkNearbyPlayers(latlng) {
-      // Retrieve all players from the database once
-      get(ref(db, 'players')).then(snapshot => {
-        let playersFound = [];
+      const playersRef = ref(db, 'players');
+      onValue(playersRef, (snapshot) => {
+        let nearby = [];
         snapshot.forEach(childSnap => {
           const p = childSnap.val();
           if (childSnap.key !== userId && p.location) {
-            const dist = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
-            if (dist < 50) playersFound.push(childSnap.key);
+            const distance = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
+            if (distance < 50) {
+              nearby.push(childSnap.key);
+            }
           }
         });
-        if (playersFound.length > 0) {
-          showNotification("Players nearby: " + playersFound.join(", "));
+        if (nearby.length > 0) {
+          showNotification("Players nearby: " + nearby.join(", "));
         }
       });
     }
     
-    // Display notifications to the user
+    // Display notifications on the HUD
     function showNotification(message) {
       const notifDiv = document.getElementById("notif");
       notifDiv.innerText = message;
-      setTimeout(() => { notifDiv.innerText = ""; }, 5000);
+      setTimeout(() => {
+        notifDiv.innerText = "";
+      }, 5000);
     }
     
     /***********************
-     * Firebase Player Sync (Live Updates)
+     * Chat System
+     ***********************/
+    // Send chat messages to the Firebase chat node
+    document.getElementById("sendChat").addEventListener("click", () => {
+      const msg = document.getElementById("chatInput").value;
+      if (msg.trim() !== "") {
+        push(ref(db, 'chat'), {
+          user: userId,
+          message: msg,
+          timestamp: serverTimestamp()
+        });
+        document.getElementById("chatInput").value = "";
+      }
+    });
+    
+    // Listen for chat messages and update the chat window
+    onValue(ref(db, 'chat'), (snapshot) => {
+      const chatDiv = document.getElementById("chat");
+      chatDiv.innerHTML = "";
+      snapshot.forEach(childSnap => {
+        const chatMsg = childSnap.val();
+        const msgEl = document.createElement("div");
+        msgEl.innerText = chatMsg.user + ": " + chatMsg.message;
+        chatDiv.appendChild(msgEl);
+      });
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    });
+    
+    /***********************
+     * Game Loop: Update Game State
+     ***********************/
+    function updateGameState() {
+      // This function could include logic for:
+      // - Updating dynamic elements (e.g., player status)
+      // - Integrating advanced RHQC grid logic for roads and events
+      // - Triggering periodic notifications or events
+      console.log("Game State Updated - Current Position:", currentPos);
+    }
+    setInterval(updateGameState, 1000);
+    
+    /***********************
+     * Firebase Live Player Sync
      ***********************/
     onValue(ref(db, 'players'), (snapshot) => {
       snapshot.forEach(childSnap => {
         const p = childSnap.val();
         if (childSnap.key !== userId && p.location) {
-          const dist = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
-          if (dist < 50) {
+          const distance = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
+          if (distance < 50) {
             showNotification("Player " + childSnap.key + " is close by on your road!");
           }
         }

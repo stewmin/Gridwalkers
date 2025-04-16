@@ -8,11 +8,11 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
-    /* Basic reset and fonts */
+    /* Basic Reset and Fonts */
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 60px; }
     
-    /* Top Control Bar (for search) */
+    /* Top Control Bar (Search) */
     #searchBar {
       position: absolute;
       top: 5px;
@@ -27,7 +27,7 @@
       font-size: 12px;
     }
     
-    /* Status Display (top-right) */
+    /* Status Display (Top Right) */
     #statusDisplay {
       position: absolute;
       top: 5px;
@@ -39,7 +39,7 @@
       font-size: 12px;
     }
     
-    /* Collapsible Left Sidebar for Inventory Icons */
+    /* Left Sidebar for Inventory Icons */
     #leftSidebar {
       position: absolute;
       top: 0;
@@ -67,7 +67,7 @@
       cursor: pointer;
     }
     
-    /* Inventory Modal Overlay (hidden by default) */
+    /* Inventory Modal Overlays */
     .inventory-modal {
       position: fixed;
       top: 20%;
@@ -93,7 +93,6 @@
       color: #333;
       margin-bottom: 5px;
     }
-    /* Inventory items inside modal */
     #equippedModal, #backpackModal {
       border: 1px solid #ccc;
       background: #fafafa;
@@ -115,7 +114,7 @@
       vertical-align: top;
     }
     
-    /* Login overlay */
+    /* Login Overlay */
     #loginOverlay {
       position: fixed;
       top: 0; left: 0;
@@ -144,7 +143,7 @@
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
     
-    /* Player Sprite: 3 stacked squares (head, torso, boots) */
+    /* Player Sprite: 3 Stacked Squares */
     .player-sprite {
       display: inline-block;
     }
@@ -158,7 +157,7 @@
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
-    /* Zombie Sprite: 3 stacked squares (green, brown, green) */
+    /* Zombie Sprite: 3 Stacked Squares */
     .zombie-sprite {
       display: inline-block;
     }
@@ -204,20 +203,18 @@
     </form>
   </div>
   
-  <!-- Left Sidebar for Inventory Icons -->
+  <!-- Left Sidebar -->
   <div id="leftSidebar">
     <div id="equippedIcon" class="inv-icon" title="Equipped">EQ</div>
     <div id="backpackIcon" class="inv-icon" title="Backpack">BP</div>
   </div>
   
-  <!-- Inventory Modal for Equipped -->
+  <!-- Inventory Modals -->
   <div id="equippedModal" class="inventory-modal">
     <div class="close-btn" onclick="toggleModal('equippedModal')">[X]</div>
     <h3>Equipped Item</h3>
     <div id="equippedContent" style="border:1px solid #ccc; background:#fafafa; padding:5px; min-height:60px;">None</div>
   </div>
-  
-  <!-- Inventory Modal for Backpack -->
   <div id="backpackModal" class="inventory-modal">
     <div class="close-btn" onclick="toggleModal('backpackModal')">[X]</div>
     <h3>Backpack</h3>
@@ -230,7 +227,7 @@
     <button id="searchBtn">Search / Teleport</button>
   </div>
   
-  <!-- Status Display: Health & Score -->
+  <!-- Status Display -->
   <div id="statusDisplay">
     Health: <span id="healthDisplay">100</span><br>
     Score: <span id="scoreDisplay">0</span>
@@ -255,28 +252,23 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script>
     /***********************
-     * GLOBAL STATE VARIABLES
+     * GLOBAL STATE VARIABLES & PROFILE HANDLING
      ***********************/
     var playerMarker = null;
     var spawnPoint = null;
     var playerHealth = 100;
     var playerScore = 0;
     var equippedItem = null; // e.g., { type:"gun", name:"pistol", damage:1, range:100 }
-    var backpack = []; // Array of loot items (max 20 items)
+    var backpack = []; // Array of loot items (max 20)
     
-    // For zombie management.
     var zombieLayer = L.layerGroup();
-    var zombieMarkers = []; // Each zombie object: { marker, zombieHealth }
+    var zombieMarkers = []; // Each zombie: { marker, zombieHealth }
     
-    // For loot boxes.
     var lootLayer = L.layerGroup();
-    // We'll store lootBox cooldowns by a unique key (e.g., lat_lng)
-    var lootCooldowns = {};
+    var lootCooldowns = {}; // Keyed by building lat_lng
     
-    // Map & RHQC elements.
     var map, drawnItems, gridBox, roadPolylines = [];
     
-    // Profiles storage: stored under localStorage key "gridwalkers_profiles"
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
       return profiles ? JSON.parse(profiles) : {};
@@ -298,18 +290,12 @@
       }
       var profiles = loadProfiles();
       if (profiles[username]) {
-        alert("Username already exists. Please choose a different username.");
+        alert("Username already exists. Choose a different one.");
         return;
       }
       profiles[username] = {
         password: password,
-        state: {
-          health: 100,
-          score: 0,
-          equipped: null,
-          backpack: [],
-          spawnPoint: null
-        }
+        state: { health: 100, score: 0, equipped: null, backpack: [], spawnPoint: null }
       };
       saveProfiles(profiles);
       alert("Registration successful! You can now log in.");
@@ -323,7 +309,7 @@
       }
       var profiles = loadProfiles();
       if (!profiles[username]) {
-        alert("No such user found. Please register.");
+        alert("No such user. Please register.");
         return;
       }
       if (profiles[username].password !== password) {
@@ -350,11 +336,8 @@
       if (!currentUser) return;
       var profiles = loadProfiles();
       profiles[currentUser].state = {
-        health: playerHealth,
-        score: playerScore,
-        equipped: equippedItem,
-        backpack: backpack,
-        spawnPoint: spawnPoint
+        health: playerHealth, score: playerScore,
+        equipped: equippedItem, backpack: backpack, spawnPoint: spawnPoint
       };
       saveProfiles(profiles);
     }
@@ -364,11 +347,7 @@
      ***********************/
     function toggleModal(modalId) {
       var modal = document.getElementById(modalId);
-      if (modal.style.display === "none" || modal.style.display === "") {
-        modal.style.display = "block";
-      } else {
-        modal.style.display = "none";
-      }
+      modal.style.display = (modal.style.display === "block") ? "none" : "block";
     }
     document.getElementById("equippedIcon").addEventListener("click", function() {
       toggleModal("equippedModal");
@@ -387,15 +366,14 @@
       backpack.forEach(function(item, idx) {
         var itemDiv = document.createElement("div");
         itemDiv.className = "inv-item";
-        itemDiv.textContent = item.name + (item.type==="ammo" ? " x" + item.quantity : "");
+        itemDiv.textContent = item.name + (item.type === "ammo" ? " x" + item.quantity : "");
         itemDiv.onclick = function() {
           if (item.type === "gun") {
             equippedItem = item;
             alert("Equipped " + item.name);
           } else if (item.type === "consumable") {
             if (item.effect === "heal") {
-              playerHealth += item.amount;
-              if (playerHealth > 100) playerHealth = 100;
+              playerHealth += item.amount; if (playerHealth > 100) playerHealth = 100;
               alert("Consumed " + item.name + ". Healed " + item.amount);
               backpack.splice(idx, 1);
             }
@@ -458,7 +436,7 @@
         fetchAndDisplayRoads();
       });
       
-      document.getElementById("searchBtn").addEventListener("click", function(){
+      document.getElementById("searchBtn").addEventListener("click", function() {
         var address = document.getElementById("addressInput").value;
         if (!address) return;
         var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(address);
@@ -481,8 +459,7 @@
         animatePlayerMove(e.latlng.lat, e.latlng.lng);
       });
       
-      // Multiplayer placeholder:
-      // TODO: Integrate Firebase for real-time player positions so all players within 1000m can see one another.
+      // Multiplayer placeholder: TODO - integrate real-time backend.
     }
     
     /***********************
@@ -509,13 +486,10 @@
       saveState();
     }
     function updateMoveIndicator() {
-      if (moveIndicator) map.removeLayer(moveIndicator);
+      if (moveIndicator) { map.removeLayer(moveIndicator); }
       if (!playerMarker) return;
       var pos = playerMarker.getLatLng();
-      moveIndicator = L.circle(pos, {
-        radius: 50,
-        className: 'move-radius'
-      }).addTo(map);
+      moveIndicator = L.circle(pos, { radius: 50, className: 'move-radius' }).addTo(map);
     }
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
@@ -531,7 +505,7 @@
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         playerMarker.setLatLng([newLat, newLng]);
         updateMoveIndicator();
-        if (progress < 1) requestAnimationFrame(animate);
+        if (progress < 1) { requestAnimationFrame(animate); }
         else { saveState(); }
       }
       requestAnimationFrame(animate);
@@ -557,13 +531,13 @@
       var θ = toRad(bearing);
       var φ1 = toRad(lat);
       var λ1 = toRad(lon);
-      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      var φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1), Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
     
     /***********************
-     * FETCH ROADS WITH GEOMETRY (Overpass API)
+     * FETCH ROADS (Overpass API)
      ***********************/
     function fetchAndDisplayRoads() {
       if (!gridBox) {
@@ -602,7 +576,7 @@
       var html = "";
       roads.sort((a, b) => a.name.localeCompare(b.name));
       roads.forEach(function(road) {
-        var mid = road.polyline[Math.floor(road.polyline.length/2)];
+        var mid = road.polyline[Math.floor(road.polyline.length / 2)];
         var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
         html += "<div class='road-item'><span class='road-code'>" + code + "</span> " + road.name + "</div>";
       });
@@ -617,11 +591,11 @@
         item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
       });
     }
-    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
+    document.getElementById("toggleRoadListBtn").addEventListener("click", function() {
       document.getElementById("roadList").style.display = "none";
       document.getElementById("roadListToggle").style.display = "block";
     });
-    document.getElementById("roadListToggle").addEventListener("click", function(){
+    document.getElementById("roadListToggle").addEventListener("click", function() {
       document.getElementById("roadList").style.display = "block";
       document.getElementById("roadListToggle").style.display = "none";
     });
@@ -652,7 +626,7 @@
     /***********************
      * ZOMBIE SPAWNING & AI
      ***********************/
-    // Zombies spawn every 30 seconds at a random distance of 100-200m from the player.
+    // Zombies spawn every 30 seconds at a random distance between 100m and 200m from the player.
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
@@ -666,7 +640,6 @@
       });
       var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
       marker.addTo(zombieLayer).bindPopup("Zombie!");
-      // Instead of shotsRemaining, assign full health.
       marker.zombieHealth = 3;
       zombieMarkers.push({ marker: marker });
     }
@@ -684,16 +657,15 @@
         var zObj = zombieMarkers[i];
         var zombiePos = zObj.marker.getLatLng();
         var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
-        // Remove zombie if more than 1000m from player.
         if (dist > 1000) {
           zombieLayer.removeLayer(zObj.marker);
           zombieMarkers.splice(i, 1);
           continue;
         }
         var target = null, speed = 0;
-        if (dist < 50) { // lock onto player if within 50m
+        if (dist < 50) { // Lock on when within 50m
           target = { lat: playerPos.lat, lng: playerPos.lng };
-          speed = 18; // chase speed, slightly slower than player
+          speed = 18;
         } else {
           var wanderDist = Math.random() * 5;
           var wanderAngle = Math.random() * 360;
@@ -701,7 +673,6 @@
           speed = 10;
         }
         animateZombieMove(zObj.marker, target.lat, target.lng, speed);
-        // If zombie is within 5m, inflict damage on the player.
         if (dist < 5) {
           playerHealth -= 1;
           updateStatusDisplay();
@@ -725,7 +696,7 @@
         var newLat = startPos.lat + (targetLat - startPos.lat) * progress;
         var newLng = startPos.lng + (targetLng - startPos.lng) * progress;
         marker.setLatLng([newLat, newLng]);
-        if (progress < 1) requestAnimationFrame(animate);
+        if (progress < 1) { requestAnimationFrame(animate); }
       }
       requestAnimationFrame(animate);
     }
@@ -741,7 +712,6 @@
         return;
       }
       var clickedMarker = e.layer;
-      // Find the associated zombie.
       for (var i = 0; i < zombieMarkers.length; i++) {
         if (zombieMarkers[i].marker === clickedMarker) {
           var playerPos = playerMarker.getLatLng();
@@ -756,12 +726,10 @@
             alert("No ammunition!");
             return;
           }
-          // Remove one ammo.
           backpack[ammoIndex].quantity--;
           if (backpack[ammoIndex].quantity <= 0) {
             backpack.splice(ammoIndex, 1);
           }
-          // Remove ammo and apply damage.
           clickedMarker.zombieHealth -= equippedItem.damage;
           if (clickedMarker.zombieHealth <= 0) {
             zombieLayer.removeLayer(clickedMarker);
@@ -777,12 +745,12 @@
     });
     
     /***********************
-     * LOOT SYSTEM: BUILDINGS & LOOT BOXES WITH COOLDOWN
+     * LOOT SYSTEM: Buildings & Loot Boxes with 5-Minute Cooldown
      ***********************/
     function fetchBuildingsAndSpawnLoot() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
-      var delta = 0.005; // rough ~500m range
+      var delta = 0.01;
       var south = playerPos.lat - delta, north = playerPos.lat + delta;
       var west = playerPos.lng - delta, east = playerPos.lng + delta;
       var bbox = south + "," + west + "," + north + "," + east;
@@ -800,10 +768,10 @@
         data.elements.forEach(function(elem) {
           if (elem.center) {
             var key = elem.center.lat.toFixed(5) + "_" + elem.center.lng.toFixed(5);
-            if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return; // still on cooldown
+            if (lootCooldowns[key] && Date.now() < lootCooldowns[key]) return;
             var lootIcon = L.divIcon({
               html: '<div class="loot-box">L</div>',
-              iconSize: [10,10],
+              iconSize: [10, 10],
               className: ''
             });
             var marker = L.marker([elem.center.lat, elem.center.lng], { icon: lootIcon });
@@ -812,9 +780,8 @@
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("You looted: " + loot.name + (loot.type==="ammo" ? " x" + loot.quantity : ""));
+              alert("You looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
-              // Set cooldown for 5 minutes.
               lootCooldowns[key] = Date.now() + (5 * 60 * 1000);
               saveState();
             });
@@ -831,8 +798,7 @@
         { chance: 0.1, item: { type:"gun", name:"hunting rifle", damage:3, range:400 } },
         { chance: 0.1, item: { type:"consumable", name:"bandage", effect:"heal", amount:10 } }
       ];
-      var rand = Math.random();
-      var cumulative = 0;
+      var rand = Math.random(), cumulative = 0;
       for (var i = 0; i < lootTable.length; i++) {
         cumulative += lootTable[i].chance;
         if (rand < cumulative) {
@@ -844,7 +810,7 @@
     setInterval(fetchBuildingsAndSpawnLoot, 30000);
     
     /***********************
-     * INVENTORY & UI UPDATES
+     * STATUS DISPLAY UPDATE
      ***********************/
     function updateStatusDisplay() {
       document.getElementById("healthDisplay").textContent = playerHealth;
@@ -864,15 +830,14 @@
     window.addEventListener("beforeunload", saveState);
     
     /***********************
-     * UPDATE LOOP
+     * UPDATE LOOP (Zombies)
      ***********************/
     setInterval(updateZombies, 1000);
     
     /***********************
      * MULTIPLAYER PLACEHOLDER
      ***********************/
-    // TODO: Integrate a real-time backend (e.g., Firebase) so that players can see others
-    // within 1000m of each other. This prototype uses localStorage and runs solo.
+    // TODO: Integrate a real-time backend (e.g., Firebase) for multiple players within 1000m.
     
   </script>
 </body>

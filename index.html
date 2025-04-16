@@ -139,6 +139,19 @@
       color: #fff;
       font-size: 8px;
     }
+    
+    /* Zombie Sprite Styling */
+    .zombie-sprite {
+      display: inline-block;
+    }
+    .zombie-sprite > div {
+      width: 6px;
+      height: 6px;
+      display: block;
+    }
+    .zombie-head { background: green; }
+    .zombie-torso { background: darkgreen; }
+    .zombie-boots { background: black; }
   </style>
 </head>
 <body>
@@ -192,8 +205,8 @@
     var backpack = [];        // Array (max 20 items)
     var map, drawnItems, gridBox, roadPolylines = [];
     var zombieLayer, lootLayer, moveIndicator;
-    var zombieMarkers = [];   // Array of zombie objects: { marker, zombieHealth }
-    var lootCooldowns = {};    // Loot box cooldown timestamps
+    var zombieMarkers = [];   // Array of zombie objects: { marker }
+    var lootCooldowns = {};   // Loot box cooldown timestamps
 
     // Profile management via localStorage
     function loadProfiles() {
@@ -233,15 +246,19 @@
       backpack = state.backpack;
       spawnPoint = state.spawnPoint;
       updateStatusDisplay();
+      
       // Hide login overlay and initialize the map
       document.getElementById("loginOverlay").style.display = "none";
       initMap();
-      // If a spawn point exists, spawn the player there and re-center the map
-      if (spawnPoint) {
-        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
-        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
+      
+      // If no spawnPoint exists, set a default spawn point at the map's center.
+      if (!spawnPoint) {
+        spawnPoint = { lat: 36.85, lon: -87.55 };
       }
-      // START INTERVALS HERE – now that the player is initialized
+      spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
+      map.setView([spawnPoint.lat, spawnPoint.lon], 18);
+      
+      // Start intervals for zombies and loot
       setInterval(spawnZombie, 30000);
       setInterval(updateZombies, 1000);
       setInterval(fetchBuildingsAndSpawnLoot, 30000);
@@ -259,7 +276,7 @@
       };
       saveProfiles(profiles);
     }
-    // Update inventory UI (extend if using a dedicated element)
+    // Update inventory UI (here we simply log the backpack)
     function updateInventoryUI() {
       console.log("Current Backpack:", backpack);
     }
@@ -662,7 +679,6 @@
        MULTIPLAYER PLACEHOLDER
        ===================================================== */
     // TODO: Integrate real-time multiplayer so players within a certain range can see each other.
-    
   </script>
 </body>
 </html>

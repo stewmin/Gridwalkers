@@ -121,6 +121,19 @@
     .player-torso { background: blue; }
     .player-boots { background: black; }
     
+    /* Zombie Sprite Styling */
+    .zombie-sprite {
+      display: inline-block;
+    }
+    .zombie-sprite > div {
+      width: 6px;
+      height: 6px;
+      display: block;
+    }
+    .zombie-head { background: green; }
+    .zombie-torso { background: darkgreen; }
+    .zombie-boots { background: black; }
+    
     /* Movement Radius Indicator (50 m) */
     .move-radius {
       fill: rgba(0, 0, 255, 0.1);
@@ -234,6 +247,15 @@
       equippedItem = state.equipped;
       backpack = state.backpack;
       spawnPoint = state.spawnPoint;
+      
+      // Assign default gun and ammo if not present
+      if (!equippedItem) { 
+        equippedItem = { type: "gun", name: "pistol", damage: 1, range: 100 };
+      }
+      if (!backpack.some(item => item.type === "ammo")) {
+        backpack.push({ type:"ammo", name:"ammo", quantity:10 });
+      }
+      
       updateStatusDisplay();
       // Hide login overlay and initialize the map
       document.getElementById("loginOverlay").style.display = "none";
@@ -320,6 +342,10 @@
       map.on('click', function(e) {
         if (playerMarker) { animatePlayerMove(e.latlng.lat, e.latlng.lng); }
       });
+      
+      // For immediate testing, spawn a zombie and fetch loot right away
+      spawnZombie();
+      fetchBuildingsAndSpawnLoot();
     }
     
     /* =====================================================

@@ -241,6 +241,10 @@
         spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
         map.setView([spawnPoint.lat, spawnPoint.lon], 18);
       }
+      // START INTERVALS HERE – now that the player is initialized
+      setInterval(spawnZombie, 30000);
+      setInterval(updateZombies, 1000);
+      setInterval(fetchBuildingsAndSpawnLoot, 30000);
     });
     // Saves current state to localStorage for currentUser
     function saveState() {
@@ -255,7 +259,7 @@
       };
       saveProfiles(profiles);
     }
-    // Update inventory UI (if using a dedicated element, you can extend this function)
+    // Update inventory UI (extend if using a dedicated element)
     function updateInventoryUI() {
       console.log("Current Backpack:", backpack);
     }
@@ -539,8 +543,6 @@
       }
       requestAnimationFrame(animate);
     }
-    setInterval(spawnZombie, 30000);
-    setInterval(updateZombies, 1000);
     
     /* =====================================================
        ZOMBIE COMBAT: CLICK-TO-SHOOT
@@ -637,7 +639,6 @@
       }
       return { type:"ammo", name:"ammo", quantity:5 };
     }
-    setInterval(fetchBuildingsAndSpawnLoot, 30000);
     
     /* =====================================================
        STATUS DISPLAY UPDATE
@@ -656,11 +657,6 @@
       location.reload();
     }
     window.addEventListener("beforeunload", saveState);
-    
-    /* =====================================================
-       UPDATE LOOP (Zombies)
-       ===================================================== */
-    setInterval(updateZombies, 1000);
     
     /* =====================================================
        MULTIPLAYER PLACEHOLDER

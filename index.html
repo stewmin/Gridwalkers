@@ -1,114 +1,594 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gridwalkers Masterpiece - Full Sandbox Game</title>
+  <title>Gridwalkers Game Masterpiece</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
-    integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" 
+        integrity="sha256-sA+e2FjTm0EM0SK2hG3GLbFq3F7Vx1z+4v+g3Y2PzU8=" crossorigin=""/>
+  <!-- Leaflet Draw CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
-    /* Basic full-screen layout for the game */
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: sans-serif;
-      background: #222;
-      color: #eee;
-      overflow: hidden;
-    }
-    #map {
+    /* --- RHQC System & Base Map Styles --- */
+    body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; }
+    #map { position: absolute; top: 60px; bottom: 0; left: 0; right: 0; }
+    /* Top control bar for RHQC system */
+    #searchBar {
       position: absolute;
-      top: 0;
-      bottom: 20%;
-      width: 100%;
+      top: 5px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 12px;
     }
-    #hud {
+    #searchBar button, #searchBar input { margin: 2px; }
+    /* Edit Mode Controls */
+    #editControls {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px;
+      border-radius: 4px;
+      display: none;
+      font-size: 12px;
+    }
+    /* Road List Panel */
+    #roadList {
+      position: absolute;
+      top: 60px;
+      right: 0;
+      width: 300px;
+      max-height: calc(100% - 60px);
+      overflow-y: auto;
+      background: rgba(255,255,255,0.95);
+      z-index: 1400;
+      padding: 10px;
+      font-size: 14px;
+    }
+    #roadList h3 { margin: 0; display: flex; justify-content: space-between; align-items: center; }
+    #roadList h3 button { font-size: 12px; padding: 2px 4px; cursor: pointer; }
+    #roadFilter { width: 100%; padding: 4px; box-sizing: border-box; font-size: 13px; margin: 5px 0; }
+    .road-item { padding: 5px; border-bottom: 1px solid #ccc; cursor: pointer; }
+    .road-item:hover { background: #eee; }
+    .road-code { font-weight: bold; color: #333; background: #f0f0f0; padding: 2px 4px; border-radius: 3px; margin-right: 5px; }
+    .road-info { font-size: 11px; color: #555; margin-top: 2px; }
+    .user-direction { color: blue; font-size: 12px; margin-left: 5px; }
+    #roadListToggle {
+      position: absolute;
+      top: 60px;
+      right: 0;
+      z-index: 1500;
+      display: none;
+      background: rgba(255,255,255,0.9);
+      padding: 5px 10px;
+      border-radius: 0 0 0 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #measureDisplay { position: absolute; bottom: 0; left: 0; background: rgba(255,255,255,0.9); padding: 5px 10px; font-size: 14px; z-index: 1500; }
+    
+    /* --- Game HUD Overlay Styles --- */
+    #gameHUD {
       position: absolute;
       bottom: 0;
-      height: 20%;
+      left: 0;
       width: 100%;
-      background: #333;
-      color: #eee;
+      height: 20%;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
       padding: 10px;
       box-sizing: border-box;
+      font-size: 14px;
       overflow-y: auto;
+      z-index: 2000;
     }
-    #notif {
-      padding: 5px;
-      margin-bottom: 5px;
-      background: #444;
-      text-align: center;
-    }
-    #inventory {
-      margin-bottom: 5px;
-    }
-    .btn {
-      padding: 6px 12px;
-      margin: 4px;
-      background: #555;
-      color: #eee;
-      cursor: pointer;
-      border: none;
-      border-radius: 4px;
-    }
-    #chat {
-      background: #222;
-      padding: 5px;
-      border: 1px solid #555;
-      height: 80px;
-      overflow-y: auto;
-      font-size: 12px;
-      margin-bottom: 5px;
-    }
-    #chatInput {
-      width: 80%;
-      padding: 4px;
-      font-size: 12px;
-    }
-    #sendChat {
-      padding: 4px 8px;
-      font-size: 12px;
-    }
+    #gameHUD div { margin-bottom: 5px; }
+    #gameHUD input { width: 70%; padding: 4px; }
+    #gameHUD button { padding: 4px 8px; margin-left: 5px; }
+    #gameChat { max-height: 50px; overflow-y: auto; font-size: 12px; background: #222; padding: 5px; }
   </style>
 </head>
 <body>
+  <!-- RHQC System Top Control Bar -->
+  <div id="searchBar">
+      <input type="text" id="addressInput" placeholder="Enter your address" size="20" />
+      <button id="searchBtn">Search</button>
+      <button id="currentLocationBtn">Current Location</button>
+      <button id="setMyLocationBtn">Set My Location</button>
+      <button id="measureBtn">Measure</button>
+      <button id="editPageBtn">Edit Page</button>
+  </div>
+  <!-- RHQC System Edit Controls -->
+  <div id="editControls">
+      <button id="addStationBtn">Add Station</button>
+      <button id="addCustomBtn">Add Custom Symbol</button>
+      <button id="addNoteBtn">Add Note Marker</button>
+      <button id="deleteMarkerBtn">Toggle Delete Mode</button>
+      <button id="saveChangesBtn">Save Changes</button>
+      <button id="cancelEditBtn">Cancel Edit</button>
+  </div>
   <!-- Map Container -->
   <div id="map"></div>
-  
-  <!-- Heads-Up Display -->
-  <div id="hud">
-    <!-- Notification area -->
-    <div id="notif">Notifications will appear here</div>
-    <!-- Inventory display -->
-    <div id="inventory">
-      <strong>Inventory:</strong> <span id="inventoryList">Empty</span>
-      <button id="clearInv" class="btn">Clear Inventory</button>
-    </div>
-    <!-- Display player's ID -->
-    <div id="playerInfo"><strong>Player:</strong> <span id="playerId"></span></div>
-    <!-- Chat system -->
-    <div id="chat"></div>
-    <div>
-      <input type="text" id="chatInput" placeholder="Type a message..." />
-      <button id="sendChat" class="btn">Send</button>
-    </div>
+  <!-- RHQC System Road List Panel -->
+  <div id="roadList">
+      <h3>
+          Road List
+          <button id="toggleRoadListBtn">Close</button>
+      </h3>
+      <input type="text" id="roadFilter" placeholder="Filter roads..." />
+      <div id="roadsContainer">No roads loaded.</div>
   </div>
+  <div id="roadListToggle">Show Road List</div>
+  <!-- Measurement Display -->
+  <div id="measureDisplay">Total: 0 ft</div>
+  <!-- Game HUD Overlay -->
+  <div id="gameHUD">
+    <div><strong>Gridwalkers Game HUD</strong> (<span id="gameUserId"></span>)</div>
+    <div id="gameNotif">No notifications.</div>
+    <div>
+      <strong>Inventory:</strong> <span id="gameInventory">Empty</span>
+      <button id="clearGameInv">Clear</button>
+    </div>
+    <div>
+      <input type="text" id="gameChatInput" placeholder="Type a message..." />
+      <button id="sendGameChat">Send</button>
+    </div>
+    <div id="gameChat">Game chat messages appear here.</div>
+  </div>
+
+  <!-- Load Leaflet and Draw Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" 
+          integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
-    integrity="sha256-o9N1j7kE1r0teY1AdNLq7kSE6mV0BtqgExbqtgtNzt8=" crossorigin=""></script>
+  <!-- **************** RHQC System Code **************** -->
+  <script>
+    /***********************
+     * GLOBAL VARIABLES & INITIAL SETUP (RHQC System)
+     ***********************/
+    var isEditing = false, deleteMarkerMode = false;
+    var map = L.map('map').setView([36.85, -87.55], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    /***********************
+     * GRID BOX DRAWING (Persistent & Invisible)
+     ***********************/
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    var drawControl = new L.Control.Draw({
+        draw: {
+            polyline: false, polygon: false, circle: false, marker: false, circlemarker: false,
+            rectangle: { shapeOptions: { color: "#3388ff", weight: 2 } }
+        },
+        edit: { featureGroup: drawnItems, edit: true, remove: false }
+    });
+    map.addControl(drawControl);
+    var gridBox = null;
+    map.on(L.Draw.Event.CREATED, function(event) {
+        var layer = event.layer;
+        drawnItems.clearLayers();
+        drawnItems.addLayer(layer);
+        layer.setStyle({ opacity: 0, fillOpacity: 0 });
+        gridBox = layer;
+        fetchAndDisplayRoads();
+    });
+    map.on('draw:edited', function(e) {
+        gridBox = drawnItems.getLayers()[0];
+        fetchAndDisplayRoads();
+    });
+
+    /***********************
+     * CURRENT LOCATION & TEMPORARY "MY LOCATION" DOT (RHQC)
+     ***********************/
+    var currentLocationMarker = null, currentRouteLine = null;
+    document.getElementById("currentLocationBtn").addEventListener("click", function(){
+        navigator.geolocation.getCurrentPosition(function(position){
+            var lat = position.coords.latitude, lon = position.coords.longitude;
+            if (!currentLocationMarker) {
+                currentLocationMarker = L.circleMarker([lat, lon], { radius: 8, color: "#0000FF", fillColor: "#0000FF", fillOpacity: 1 })
+                                      .addTo(map).bindPopup("Your current location");
+            } else {
+                currentLocationMarker.setLatLng([lat, lon]);
+            }
+            map.setView([lat, lon], 16);
+            currentLocationMarker.openPopup();
+        }, function(error){ alert("Location access denied or unavailable."); }, { enableHighAccuracy: true });
+    });
+    document.getElementById("setMyLocationBtn").addEventListener("click", function(){
+        alert("Click on the map to set a temporary 'My Location' marker.");
+        map.once('click', function(e){
+            var lat = e.latlng.lat, lon = e.latlng.lng;
+            if (currentLocationMarker) { map.removeLayer(currentLocationMarker); }
+            currentLocationMarker = L.circleMarker([lat, lon], { radius: 8, color: "#0000FF", fillColor: "#0000FF", fillOpacity: 1 })
+                                      .addTo(map).bindPopup("My Location (set manually)").openPopup();
+        });
+    });
+    if ("geolocation" in navigator) {
+        navigator.geolocation.watchPosition(function(position){
+            var lat = position.coords.latitude, lon = position.coords.longitude;
+            if (currentLocationMarker) { currentLocationMarker.setLatLng([lat, lon]); }
+        }, function(error){ console.error("watchPosition error:", error); }, { enableHighAccuracy: true });
+    }
+
+    /***********************
+     * STATIC FIRE STATION DATA (RHQC)
+     ***********************/
+    var fireStations = [];
+    var markerLayerGroup = L.layerGroup().addTo(map);
+    function updateStationMarkers() {
+        markerLayerGroup.clearLayers();
+        fireStations.forEach(function(station, index) {
+            var redSquareIcon = L.divIcon({
+                html: '<div style="width:16px;height:16px;background:red;border:2px solid darkred;"></div>',
+                iconSize: [20,20],
+                className: ''
+            });
+            var marker = L.marker([station.lat, station.lon], { icon: redSquareIcon })
+                          .addTo(markerLayerGroup)
+                          .bindPopup(station.name);
+            station._leafletId = marker._leafletId;
+            marker.on('click', function(e) {
+                if (isEditing && deleteMarkerMode) {
+                    if (confirm("Delete station: " + station.name + "?")) {
+                        fireStations.splice(index, 1);
+                        updateStationMarkers();
+                        saveMarkersToStorage();
+                        alert("Station deleted.");
+                    }
+                }
+            });
+        });
+    }
+    updateStationMarkers();
+
+    function saveMarkersToStorage() {
+        localStorage.setItem("fireStations", JSON.stringify(fireStations));
+    }
+    function loadMarkersFromStorage() {
+        var data = localStorage.getItem("fireStations");
+        if (data) {
+            try { fireStations = JSON.parse(data); } catch (e) { fireStations = []; }
+        }
+        updateStationMarkers();
+    }
+    loadMarkersFromStorage();
+    document.getElementById("editPageBtn").addEventListener("click", function(){
+        var pwd = prompt("Enter password:");
+        if (pwd === "Password911") {
+            isEditing = true;
+            document.getElementById("editControls").style.display = "block";
+            alert("Edit mode activated. Use the controls to add or delete markers.");
+        } else { alert("Incorrect password."); }
+    });
+    document.getElementById("addStationBtn").addEventListener("click", function(){
+        if (!isEditing) return;
+        alert("Click on the map to add a new fire station.");
+        map.once('click', function(e){
+            var lat = e.latlng.lat, lon = e.latlng.lng;
+            var name = prompt("Enter fire station name:", "New Station") || "New Station";
+            fireStations.push({ type: "fireStation", lat: lat, lon: lon, name: name });
+            updateStationMarkers();
+            saveMarkersToStorage();
+            alert("Station added at " + lat.toFixed(4) + ", " + lon.toFixed(4));
+        });
+    });
+    document.getElementById("addCustomBtn").addEventListener("click", function(){
+        if (!isEditing) return;
+        alert("Click on the map to add a new custom symbol marker.");
+        map.once('click', function(e){
+            var lat = e.latlng.lat, lon = e.latlng.lng;
+            var name = prompt("Enter custom marker name:", "Custom Marker");
+            var note = prompt("Enter note (optional):", "");
+            fireStations.push({ type: "customSymbol", lat: lat, lon: lon, name: name, note: note });
+            updateStationMarkers();
+            saveMarkersToStorage();
+            alert("Custom marker added.");
+        });
+    });
+    document.getElementById("addNoteBtn").addEventListener("click", function(){
+        if (!isEditing) return;
+        alert("Click on the map to add a new note marker.");
+        map.once('click', function(e){
+            var lat = e.latlng.lat, lon = e.latlng.lng;
+            var name = prompt("Enter note title:", "Note");
+            var note = prompt("Enter note text:", "");
+            fireStations.push({ type: "noteMarker", lat: lat, lon: lon, name: name, note: note });
+            updateStationMarkers();
+            saveMarkersToStorage();
+            alert("Note marker added.");
+        });
+    });
+    document.getElementById("deleteMarkerBtn").addEventListener("click", function(){
+        if (!isEditing) return;
+        deleteMarkerMode = !deleteMarkerMode;
+        if (deleteMarkerMode) {
+            alert("Delete mode activated. Click on a marker to delete it.");
+            this.style.backgroundColor = "red";
+        } else {
+            alert("Delete mode deactivated.");
+            this.style.backgroundColor = "";
+        }
+    });
+    document.getElementById("saveChangesBtn").addEventListener("click", function(){
+        saveMarkersToStorage();
+        isEditing = false;
+        deleteMarkerMode = false;
+        document.getElementById("editControls").style.display = "none";
+        alert("Changes saved. Exiting edit mode.");
+    });
+    document.getElementById("cancelEditBtn").addEventListener("click", function(){
+        loadMarkersFromStorage();
+        isEditing = false;
+        deleteMarkerMode = false;
+        document.getElementById("editControls").style.display = "none";
+        alert("Edit mode canceled. Unsaved changes discarded.");
+    });
+
+    /***********************
+     * MAIN ROAD DATA (Overpass Placeholder)
+     ***********************/
+    var mainRoads = [];
+    function fetchMainRoads() {
+        if (!gridBox) return;
+        var bounds = gridBox.getBounds();
+        var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
+        var bbox = south + "," + west + "," + north + "," + east;
+        var query = `[out:json][timeout:25];
+(
+  way["highway"="primary"](${bbox});
+);
+out center;`;
+        fetch("https://overpass-api.de/api/interpreter", {
+            method: "POST",
+            body: "data=" + encodeURIComponent(query)
+        })
+        .then(function(response){ return response.json(); })
+        .then(function(data) {
+            mainRoads = data.elements.map(function(e) { 
+                return { lat: e.center.lat, lon: e.center.lon, name: e.tags.name || "Main Road" }; 
+            });
+        }).catch(function(error){ console.error("Error fetching main roads:", error); });
+    }
+
+    /***********************
+     * EMERGENCY CALL DATA (Dummy Placeholder)
+     ***********************/
+    var emergencyCalls = [];
+    function fetchEmergencyCalls() {
+        emergencyCalls = [
+            { lat: 36.87, lon: -87.55, time: "10:15 AM" },
+            { lat: 36.82, lon: -87.60, time: "11:30 AM" },
+            { lat: 36.84, lon: -87.52, time: "12:05 PM" }
+        ];
+        displayEmergencyCalls();
+    }
+    var emergencyCallLayer = new L.LayerGroup().addTo(map);
+    function displayEmergencyCalls() {
+        emergencyCallLayer.clearLayers();
+        if (!gridBox) return;
+        var bounds = gridBox.getBounds();
+        emergencyCalls.forEach(function(call) {
+            var latlng = L.latLng(call.lat, call.lon);
+            if (bounds.contains(latlng)) {
+                L.marker(latlng, { 
+                    icon: L.icon({
+                        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+                        iconSize: [24,24]
+                    })
+                }).addTo(emergencyCallLayer)
+                .bindPopup("911 Call at " + call.time);
+            }
+        });
+    }
+    fetchEmergencyCalls();
+
+    /***********************
+     * HELPER FUNCTIONS (RHQC)
+     ***********************/
+    function toRad(value) { return value * Math.PI / 180; }
+    function toDeg(rad) { return rad * 180 / Math.PI; }
+    function getDistanceMiles(lat1, lon1, lat2, lon2) {
+        var R = 3958.8;
+        var dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+        var a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+    function getBearing(lat1, lon1, lat2, lon2) {
+        var dLon = toRad(lon2 - lon1);
+        var y = Math.sin(dLon)*Math.cos(toRad(lat2));
+        var x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
+        var brng = Math.atan2(y, x);
+        return (toDeg(brng) + 360) % 360;
+    }
+    function getCardinalDirection(deg) {
+        var directions = ['N','NE','E','SE','S','SW','W','NW'];
+        var index = Math.round(deg/45) % 8;
+        return directions[index];
+    }
+    function getUserDirectionIndicator(roadLat, roadLon) {
+        var indicator = "";
+        if (currentLocationMarker) {
+            var userLatLng = currentLocationMarker.getLatLng();
+            var bearing = getBearing(userLatLng.lat, userLatLng.lng, roadLat, roadLon);
+            var cardinal = getCardinalDirection(bearing);
+            var arrow = "";
+            switch(cardinal) {
+                case "N": arrow = "&#8593;"; break;
+                case "NE": arrow = "&#8599;"; break;
+                case "E": arrow = "&#8594;"; break;
+                case "SE": arrow = "&#8600;"; break;
+                case "S": arrow = "&#8595;"; break;
+                case "SW": arrow = "&#8601;"; break;
+                case "W": arrow = "&#8592;"; break;
+                case "NW": arrow = "&#8598;"; break;
+                default: arrow = "";
+            }
+            indicator = "<span class='user-direction' title='From your location: " + cardinal + "'>" + arrow + "</span>";
+        }
+        return indicator;
+    }
+    function getRHQCCode(lat, lng, bounds, maxLevel) {
+        var code = "";
+        var currentBounds = JSON.parse(JSON.stringify(bounds));
+        for (var level = 1; level <= maxLevel; level++) {
+            var south = currentBounds[0][0], west = currentBounds[0][1],
+                north = currentBounds[1][0], east = currentBounds[1][1];
+            var midLat = (south+north)/2, midLng = (west+east)/2;
+            if (lat >= midLat && lng <= midLng) {
+                code += "1";
+                currentBounds = [[midLat, west], [north, midLng]];
+            } else if (lat >= midLat && lng > midLng) {
+                code += "2";
+                currentBounds = [[midLat, midLng], [north, east]];
+            } else if (lat < midLat && lng <= midLng) {
+                code += "3";
+                currentBounds = [[south, west], [midLat, midLng]];
+            } else {
+                code += "4";
+                currentBounds = [[south, midLng], [midLat, east]];
+            }
+        }
+        return code;
+    }
+
+    /***********************
+     * FETCH & DISPLAY ROADS (Overpass)
+     ***********************/
+    function fetchAndDisplayRoads() {
+        if (!gridBox) {
+            document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
+            return;
+        }
+        var bounds = gridBox.getBounds();
+        var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
+        var bbox = south + "," + west + "," + north + "," + east;
+        var query = `[out:json][timeout:25];
+(
+  way["highway"](${bbox});
+);
+out center;`;
+        fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:"data=" + encodeURIComponent(query) })
+        .then(function(response){ return response.json(); })
+        .then(function(data){ processRoadData(data.elements, bounds); })
+        .catch(function(error){
+            console.error("Error fetching roads:", error);
+            document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
+        });
+    }
+    function processRoadData(elements, gridBounds) {
+        var roads = [];
+        elements.forEach(function(elem) {
+            if (elem.type === "way" && elem.tags && elem.tags.name && elem.center) {
+                roads.push({ name: elem.tags.name, lat: elem.center.lat, lon: elem.center.lon });
+            }
+        });
+        var uniqueRoads = {};
+        roads.forEach(function(road) { uniqueRoads[road.name] = road; });
+        roads = Object.values(uniqueRoads);
+        roads.sort(function(a, b) { return a.name.localeCompare(b.name); });
+        var html = "";
+        roads.forEach(function(road) {
+            var code = getRHQCCode(road.lat, road.lon, [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
+            var nearestStation = null, minDist = Infinity;
+            fireStations.forEach(function(station) {
+                var d = getDistanceMiles(road.lat, road.lon, station.lat, station.lon);
+                if (d < minDist) { minDist = d; nearestStation = station; }
+            });
+            var stationBearing = nearestStation ? getBearing(nearestStation.lat, nearestStation.lon, road.lat, road.lon) : null;
+            var stationCardinal = stationBearing !== null ? getCardinalDirection(stationBearing) : "";
+            var stationInfo = nearestStation ? (minDist.toFixed(1) + " mi (Dir: " + stationCardinal + ")") : "N/A";
+            var userDir = getUserDirectionIndicator(road.lat, road.lon);
+            html += "<div class='road-item' onclick='zoomToRoad(" + road.lat + ", " + road.lon + ")'>";
+            html += "<span class='road-code'>" + code + "</span> " + road.name + userDir;
+            html += "<div class='road-info'>Fire Station: " + stationInfo + "</div>";
+            html += "</div>";
+        });
+        if(html==="") html = "No roads found.";
+        document.getElementById("roadsContainer").innerHTML = html;
+        applyRoadFilter();
+    }
+
+    /***********************
+     * ROAD LIST PANEL & FILTERING
+     ***********************/
+    document.getElementById("roadFilter").addEventListener("input", applyRoadFilter);
+    function applyRoadFilter() {
+        var filterText = document.getElementById("roadFilter").value.toLowerCase();
+        var roadItems = document.querySelectorAll("#roadsContainer .road-item");
+        roadItems.forEach(function(item) {
+            if (item.textContent.toLowerCase().indexOf(filterText) > -1) {
+                item.style.display = "";
+            } else {
+                item.style.display = "none";
+            }
+        });
+    }
+    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
+        document.getElementById("roadList").style.display = "none";
+        document.getElementById("roadListToggle").style.display = "block";
+    });
+    document.getElementById("roadListToggle").addEventListener("click", function(){
+        document.getElementById("roadList").style.display = "block";
+        document.getElementById("roadListToggle").style.display = "none";
+    });
+
+    /***********************
+     * ROUTE DRAWING (Direct from Nearest Fire Station)
+     ***********************/
+    function zoomToRoad(lat, lon) {
+        map.setView([lat, lon], 18);
+        var nearestStation = null, minDist = Infinity;
+        fireStations.forEach(function(station) {
+            var d = getDistanceMiles(lat, lon, station.lat, station.lon);
+            if (d < minDist) { minDist = d; nearestStation = station; }
+        });
+        if (currentRouteLine) { map.removeLayer(currentRouteLine); }
+        if (nearestStation) {
+            currentRouteLine = L.polyline([[nearestStation.lat, nearestStation.lon], [lat, lon]], { color: "orange", weight: 3 }).addTo(map);
+            var d = getDistanceMiles(nearestStation.lat, nearestStation.lon, lat, lon).toFixed(1);
+            currentRouteLine.bindTooltip(d + " mi", { permanent: true, direction: 'center' }).openTooltip();
+        }
+        L.circleMarker([lat, lon], { radius: 6, color: "#FF0000" }).addTo(map)
+            .bindPopup("Road Location").openPopup();
+        document.getElementById("roadList").style.display = "none";
+        document.getElementById("roadListToggle").style.display = "block";
+    }
+
+    /***********************
+     * ADDRESS SEARCH
+     ***********************/
+    document.getElementById("searchBtn").addEventListener("click", function(){
+        var address = document.getElementById("addressInput").value;
+        if (!address) return;
+        var url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(address);
+        fetch(url)
+            .then(function(response){ return response.json(); })
+            .then(function(data){
+                if (data.length > 0) {
+                    var lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+                    map.setView([lat, lon], 16);
+                    L.marker([lat, lon]).addTo(map).bindPopup("Search Result: " + address).openPopup();
+                } else { alert("Address not found!"); }
+            });
+    });
+  </script>
   
-  <!-- Main Script (using Firebase modular SDK) -->
+  <!-- **************** Game Module Integration **************** -->
   <script type="module">
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue, push, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
+    import { getDatabase, ref, set, onValue, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
     
-    /***********************
-     * Firebase Setup
-     ***********************/
+    // Firebase configuration for Gridwalkers game
     const firebaseConfig = {
       apiKey: "AIzaSyDGaaEqlkNdlfBpDSDojctIOrhgwMchw6M",
       authDomain: "gridwalkers-f084e.firebaseapp.com",
@@ -118,216 +598,78 @@
       messagingSenderId: "924068197891",
       appId: "1:924068197891:web:3dbb3dfbd07ce01f618036"
     };
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const appGame = initializeApp(firebaseConfig, "GameApp");
+    const dbGame = getDatabase(appGame);
     
-    // Generate a unique user id (for production, you’d use proper authentication)
-    const userId = "user_" + Math.random().toString(36).substr(2, 9);
-    console.log("User ID:", userId);
-    document.getElementById("playerId").innerText = userId;
+    // Use a separate user id namespace for game-specific functionality
+    const gameUserId = "gameUser_" + Math.random().toString(36).substr(2, 9);
+    console.log("Game User ID:", gameUserId);
+    document.getElementById("gameUserId").innerText = gameUserId;
     
-    /***********************
-     * Global Variables & Game State
-     ***********************/
-    let playerMarker;  // Player's marker object
-    let currentPos = {lat: 40.7128, lng: -74.0060}; // Default starting position (New York City)
-    let inventory = [];
-    let zombies = [];  // Array for zombie markers (for extended game logic)
+    // Game state variables
+    let gamePlayerMarker = null;
+    let gameCurrentPos = { lat: 40.7128, lng: -74.0060 };
+    let gameInventory = [];
     
-    // Dummy data for safe zones and lootable buildings (these can come from OSM in a full version)
-    const safeZones = [
-      {lat: 40.7138, lng: -74.0050, type: "Fire Station"},
-      {lat: 40.7120, lng: -74.0070, type: "Police Station"},
-      {lat: 40.7130, lng: -74.0045, type: "Church"},
-      {lat: 40.7115, lng: -74.0065, type: "Park"}
-    ];
-    const buildings = [
-      {lat: 40.7132, lng: -74.0065, name: "Building A"},
-      {lat: 40.7125, lng: -74.0055, name: "Building B"},
-      {lat: 40.7129, lng: -74.0072, name: "Building C"}
-    ];
-    
-    /***********************
-     * Initialize Map with Leaflet
-     ***********************/
-    const map = L.map('map').setView([currentPos.lat, currentPos.lng], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-    console.log("Map initialized.");
-    
-    // Create a marker for the player
-    function createPlayerMarker(lat, lng) {
-      if (playerMarker) {
-        map.removeLayer(playerMarker);
-      }
-      playerMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
+    // Create a game player marker (using a distinct icon)
+    function createGamePlayerMarker(lat, lng) {
+      if (gamePlayerMarker) { map.removeLayer(gamePlayerMarker); }
+      gamePlayerMarker = L.marker([lat, lng], {
+        icon: L.icon({
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        })
+      }).addTo(map).bindPopup("Game Player").openPopup();
     }
-    createPlayerMarker(currentPos.lat, currentPos.lng);
+    createGamePlayerMarker(gameCurrentPos.lat, gameCurrentPos.lng);
     
-    // Update player position and store it to Firebase
-    function updatePlayerPosition(lat, lng) {
-      currentPos = {lat, lng};
-      createPlayerMarker(lat, lng);
-      set(ref(db, 'players/' + userId), {
-        location: currentPos,
-        inventory: inventory,
+    // Update game player position and store in Firebase
+    function updateGamePlayerPosition(lat, lng) {
+      gameCurrentPos = { lat, lng };
+      createGamePlayerMarker(lat, lng);
+      set(ref(dbGame, 'gamePlayers/' + gameUserId), {
+        location: gameCurrentPos,
+        inventory: gameInventory,
         timestamp: serverTimestamp()
       });
-      console.log("Player position updated:", currentPos);
+      showGameNotification("Position updated: (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")");
     }
     
-    // Listen for map clicks to set a new player position
-    map.on('click', (e) => {
-      console.log("Map clicked at:", e.latlng);
-      updatePlayerPosition(e.latlng.lat, e.latlng.lng);
-      checkSafeZones(e.latlng);
-      checkNearbyPlayers(e.latlng);
+    // Listen for double-clicks on the map as game move commands
+    map.on('dblclick', (e) => {
+      console.log("Game move on double-click:", e.latlng);
+      updateGamePlayerPosition(e.latlng.lat, e.latlng.lng);
     });
     
-    /***********************
-     * Render Safe Zones and Buildings
-     ***********************/
-    // Render safe zones as green circle markers
-    safeZones.forEach(zone => {
-      const safeIcon = L.divIcon({
-        html: `<div style="background: #0a0; border-radius: 50%; width: 20px; height: 20px; text-align: center; line-height: 20px; color: #fff;">${zone.type.charAt(0)}</div>`,
-        className: ''
-      });
-      L.marker([zone.lat, zone.lng], {icon: safeIcon}).addTo(map).bindPopup(zone.type);
-    });
-    
-    // Render buildings as lootable zones with a building icon
-    buildings.forEach(bldg => {
-      const buildingIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972185.png',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      const marker = L.marker([bldg.lat, bldg.lng], {icon: buildingIcon}).addTo(map);
-      marker.bindPopup(bldg.name + "<br/><button onclick='lootBuilding(\"" + bldg.name + "\")'>Loot</button>");
-    });
-    
-    // Expose lootBuilding globally (for inline popup calls)
-    window.lootBuilding = function(buildingName) {
-      const lootItems = ["Old Gun", "Ammo Box", "Medkit", "Rare Key", "Empty Bottle"];
-      const loot = lootItems[Math.floor(Math.random() * lootItems.length)];
-      inventory.push({building: buildingName, item: loot});
-      updateInventoryDisplay();
-      showNotification("Looted " + loot + " from " + buildingName);
-      set(ref(db, 'players/' + userId + '/inventory'), inventory);
-    };
-    
-    // Update the HUD inventory display
-    function updateInventoryDisplay() {
-      document.getElementById("inventoryList").innerText = inventory.map(i => i.item).join(", ") || "Empty";
+    // Update game inventory display
+    function updateGameInventoryDisplay() {
+      document.getElementById("gameInventory").innerText = gameInventory.join(", ") || "Empty";
     }
     
-    // Clear inventory event handler
-    document.getElementById("clearInv").addEventListener("click", () => {
-      inventory = [];
-      updateInventoryDisplay();
-      set(ref(db, 'players/' + userId + '/inventory'), inventory);
-    });
-    
-    /***********************
-     * Zombie Mechanics
-     ***********************/
-    // Spawn a zombie near the player's current position at a random offset
-    function spawnZombie() {
-      const latOffset = (Math.random() - 0.5) * 0.001;
-      const lngOffset = (Math.random() - 0.5) * 0.001;
-      const zombieLat = currentPos.lat + latOffset;
-      const zombieLng = currentPos.lng + lngOffset;
-      
-      const zombieIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      const zombieMarker = L.marker([zombieLat, zombieLng], {icon: zombieIcon}).addTo(map);
-      zombieMarker.bindPopup("Zombie! <br/><button onclick='defeatZombie(\"" + zombieLat + "\", \"" + zombieLng + "\")'>Attack</button>");
-      
-      zombies.push(zombieMarker);
-      
-      // Automatically remove zombie after 30 seconds if not defeated
-      setTimeout(() => {
-        map.removeLayer(zombieMarker);
-      }, 30000);
-    }
-    
-    // Expose defeatZombie globally for inline calls
-    window.defeatZombie = function(zombieLat, zombieLng) {
-      map.closePopup();
-      const zombieLootItems = ["Zombie Tooth", "Torn Cloth", "Ammo Scrap"];
-      const loot = zombieLootItems[Math.floor(Math.random() * zombieLootItems.length)];
-      inventory.push({source: "Zombie", item: loot});
-      updateInventoryDisplay();
-      showNotification("Defeated zombie and looted: " + loot);
-    };
-    
-    // Spawn a zombie every 30 seconds
-    setInterval(spawnZombie, 30000);
-    
-    /***********************
-     * Proximity Checks and Notifications
-     ***********************/
-    function checkSafeZones(latlng) {
-      safeZones.forEach(zone => {
-        const distance = map.distance(latlng, L.latLng(zone.lat, zone.lng));
-        if (distance < 30) {
-          showNotification("You are within a safe zone (" + zone.type + "). Rest, trade, or switch gear here.");
-        }
-      });
-    }
-    
-    function checkNearbyPlayers(latlng) {
-      const playersRef = ref(db, 'players');
-      onValue(playersRef, (snapshot) => {
-        let nearby = [];
-        snapshot.forEach(childSnap => {
-          const p = childSnap.val();
-          if (childSnap.key !== userId && p.location) {
-            const distance = map.distance(latlng, L.latLng(p.location.lat, p.location.lng));
-            if (distance < 50) {
-              nearby.push(childSnap.key);
-            }
-          }
-        });
-        if (nearby.length > 0) {
-          showNotification("Players nearby: " + nearby.join(", "));
-        }
-      });
-    }
-    
-    // Display notifications on the HUD
-    function showNotification(message) {
-      const notifDiv = document.getElementById("notif");
+    // Show notifications in game HUD
+    function showGameNotification(message) {
+      const notifDiv = document.getElementById("gameNotif");
       notifDiv.innerText = message;
-      setTimeout(() => {
-        notifDiv.innerText = "";
-      }, 5000);
+      setTimeout(() => { notifDiv.innerText = ""; }, 5000);
     }
     
-    /***********************
-     * Chat System
-     ***********************/
-    // Send chat messages to the Firebase chat node
-    document.getElementById("sendChat").addEventListener("click", () => {
-      const msg = document.getElementById("chatInput").value;
+    // Simple Game Chat: send message on click
+    document.getElementById("sendGameChat").addEventListener("click", () => {
+      const msg = document.getElementById("gameChatInput").value;
       if (msg.trim() !== "") {
-        push(ref(db, 'chat'), {
-          user: userId,
+        push(ref(dbGame, 'gameChat'), {
+          user: gameUserId,
           message: msg,
           timestamp: serverTimestamp()
         });
-        document.getElementById("chatInput").value = "";
+        document.getElementById("gameChatInput").value = "";
       }
     });
     
-    // Listen for chat messages and update the chat window
-    onValue(ref(db, 'chat'), (snapshot) => {
-      const chatDiv = document.getElementById("chat");
+    // Listen for game chat messages
+    onValue(ref(dbGame, 'gameChat'), (snapshot) => {
+      const chatDiv = document.getElementById("gameChat");
       chatDiv.innerHTML = "";
       snapshot.forEach(childSnap => {
         const chatMsg = childSnap.val();
@@ -338,33 +680,56 @@
       chatDiv.scrollTop = chatDiv.scrollHeight;
     });
     
-    /***********************
-     * Game Loop: Update Game State
-     ***********************/
-    function updateGameState() {
-      // This function could include logic for:
-      // - Updating dynamic elements (e.g., player status)
-      // - Integrating advanced RHQC grid logic for roads and events
-      // - Triggering periodic notifications or events
-      console.log("Game State Updated - Current Position:", currentPos);
-    }
-    setInterval(updateGameState, 1000);
+    // Clear game inventory button
+    document.getElementById("clearGameInv").addEventListener("click", () => {
+      gameInventory = [];
+      updateGameInventoryDisplay();
+      set(ref(dbGame, 'gamePlayers/' + gameUserId + '/inventory'), gameInventory);
+    });
     
-    /***********************
-     * Firebase Live Player Sync
-     ***********************/
-    onValue(ref(db, 'players'), (snapshot) => {
+    // Simple game loop: spawn zombies every 45 seconds near the game player
+    function spawnGameZombie() {
+      const latOffset = (Math.random() - 0.5) * 0.002;
+      const lngOffset = (Math.random() - 0.5) * 0.002;
+      const zLat = gameCurrentPos.lat + latOffset;
+      const zLng = gameCurrentPos.lng + lngOffset;
+      const zombie = L.marker([zLat, zLng], {
+        icon: L.icon({
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1041/1041910.png',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        })
+      }).addTo(map);
+      zombie.bindPopup("Game Zombie! <br/><button onclick='defeatGameZombie(\"" + zLat + "\", \"" + zLng + "\")'>Attack</button>");
+      setTimeout(() => { map.removeLayer(zombie); }, 30000);
+    }
+    
+    // Expose defeatGameZombie so it can be called by the popup button
+    window.defeatGameZombie = function(zLat, zLng) {
+      map.closePopup();
+      const lootOptions = ["Zombie Tooth", "Scrap Metal", "Ammo Fragment"];
+      const loot = lootOptions[Math.floor(Math.random() * lootOptions.length)];
+      gameInventory.push(loot);
+      updateGameInventoryDisplay();
+      showGameNotification("Defeated zombie and looted: " + loot);
+    }
+    
+    setInterval(spawnGameZombie, 45000);
+    
+    // Live sync: notify if another game player is nearby (within 50 m)
+    onValue(ref(dbGame, 'gamePlayers'), (snapshot) => {
       snapshot.forEach(childSnap => {
         const p = childSnap.val();
-        if (childSnap.key !== userId && p.location) {
-          const distance = map.distance(currentPos, L.latLng(p.location.lat, p.location.lng));
-          if (distance < 50) {
-            showNotification("Player " + childSnap.key + " is close by on your road!");
+        if (childSnap.key !== gameUserId && p.location) {
+          const dist = map.distance(gameCurrentPos, L.latLng(p.location.lat, p.location.lng));
+          if (dist < 50) {
+            showGameNotification("Player " + childSnap.key + " is nearby on the game map!");
           }
         }
       });
     });
     
+    console.log("Game module initialized.");
   </script>
 </body>
 </html>

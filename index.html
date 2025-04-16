@@ -81,6 +81,13 @@
       justify-content: center;
       align-items: center;
       color: #fff;
+      flex-direction: column;
+    }
+    #loginOverlay h1 {
+      font-family: 'Press Start 2P', cursive;
+      color: limegreen;
+      font-size: 28px;
+      margin-bottom: 20px;
     }
     #loginOverlay form {
       background: #333;
@@ -89,6 +96,10 @@
       text-align: center;
     }
     #loginOverlay input { margin: 5px; padding: 5px; }
+    #loginOverlay button { margin: 5px; padding: 5px 10px; }
+    
+    /* Load Google Font for 8-bit look (optional) */
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     
     /* Player Sprite: 3 stacked squares (head, torso, boots) */
     .player-sprite {
@@ -141,11 +152,12 @@
 <body>
   <!-- Login Overlay -->
   <div id="loginOverlay">
+    <h1>GRIDWALKERS</h1>
     <form id="loginForm">
-      <h2>Login</h2>
-      <input type="text" id="usernameInput" placeholder="Enter username" required />
-      <br />
-      <button type="submit">Login</button>
+      <input type="text" id="usernameInput" placeholder="Username" required /><br>
+      <input type="password" id="passwordInput" placeholder="Password" required /><br>
+      <button type="button" id="registerBtn">Register</button>
+      <button type="button" id="loginBtn">Login</button>
     </form>
   </div>
   
@@ -199,70 +211,107 @@
     
     // For zombie management.
     var zombieLayer = L.layerGroup();
-    zombieLayer.addTo(null);  // will add to map after map init
-    var zombieMarkers = []; // Each zombie object: { marker, shotsTaken }
+    var zombieMarkers = []; // Each zombie object: { marker, shotsRemaining }
     
     // For loot boxes.
     var lootLayer = L.layerGroup();
     
-    // Map & RHQC elements (see later)
+    // Map & RHQC elements.
     var map, drawnItems, gridBox, roadPolylines = [];
     
-    /***********************
-     * LOGIN & STATE SAVE/LOAD (using localStorage)
-     ***********************/
-    var currentUser = null;
-    function loadState(username) {
-      var state = localStorage.getItem('gridwalkers_' + username);
-      if (state) {
-        return JSON.parse(state);
-      }
-      // Default state:
-      return {
-        health: 100,
-        score: 0,
-        equipped: null,
-        backpack: [],
-        spawnPoint: null
-      };
+    // Profiles storage: profiles saved under localStorage key "gridwalkers_profiles" as an object.
+    function loadProfiles() {
+      var profiles = localStorage.getItem("gridwalkers_profiles");
+      return profiles ? JSON.parse(profiles) : {};
     }
+    function saveProfiles(profiles) {
+      localStorage.setItem("gridwalkers_profiles", JSON.stringify(profiles));
+    }
+    
+    var currentUser = null;
+    
+    /***********************
+     * LOGIN FUNCTIONALITY
+     ***********************/
+    document.getElementById("registerBtn").addEventListener("click", function() {
+      var username = document.getElementById("usernameInput").value.trim();
+      var password = document.getElementById("passwordInput").value;
+      if (!username || !password) {
+        alert("Please provide a username and password.");
+        return;
+      }
+      var profiles = loadProfiles();
+      if (profiles[username]) {
+        alert("Username already exists. Please choose a different username.");
+        return;
+      }
+      // Create new profile with default state.
+      profiles[username] = {
+        password: password,
+        state: {
+          health: 100,
+          score: 0,
+          equipped: null,
+          backpack: [],
+          spawnPoint: null
+        }
+      };
+      saveProfiles(profiles);
+      alert("Registration successful! You can now log in.");
+    });
+    
+    document.getElementById("loginBtn").addEventListener("click", function() {
+      var username = document.getElementById("usernameInput").value.trim();
+      var password = document.getElementById("passwordInput").value;
+      if (!username || !password) {
+        alert("Please provide a username and password.");
+        return;
+      }
+      var profiles = loadProfiles();
+      if (!profiles[username]) {
+        alert("No such user found. Please register.");
+        return;
+      }
+      if (profiles[username].password !== password) {
+        alert("Incorrect password.");
+        return;
+      }
+      currentUser = username;
+      // Load state.
+      var state = profiles[username].state;
+      playerHealth = state.health;
+      playerScore = state.score;
+      equippedItem = state.equipped;
+      backpack = state.backpack;
+      spawnPoint = state.spawnPoint;
+      updateStatusDisplay();
+      updateInventoryUI();
+      document.getElementById("loginOverlay").style.display = "none";
+      initMap();
+      if (spawnPoint) {
+        spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
+        map.setView([spawnPoint.lat, spawnPoint.lon], 18);
+      }
+    });
+    
+    /***********************
+     * SAVE CURRENT USER STATE
+     ***********************/
     function saveState() {
       if (!currentUser) return;
-      var state = {
+      var profiles = loadProfiles();
+      profiles[currentUser].state = {
         health: playerHealth,
         score: playerScore,
         equipped: equippedItem,
         backpack: backpack,
         spawnPoint: spawnPoint
       };
-      localStorage.setItem('gridwalkers_' + currentUser, JSON.stringify(state));
+      saveProfiles(profiles);
     }
     
-    document.getElementById("loginForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      var username = document.getElementById("usernameInput").value.trim();
-      if (username) {
-        currentUser = username;
-        var state = loadState(username);
-        playerHealth = state.health;
-        playerScore = state.score;
-        equippedItem = state.equipped;
-        backpack = state.backpack;
-        spawnPoint = state.spawnPoint;
-        updateStatusDisplay();
-        updateInventoryUI();
-        document.getElementById("loginOverlay").style.display = "none";
-        initMap();
-        // If spawnPoint exists, place player there.
-        if (spawnPoint) {
-          spawnPlayerAt(spawnPoint.lat, spawnPoint.lon);
-          map.setView([spawnPoint.lat, spawnPoint.lon], 18);
-        }
-      }
-    });
-    
     /***********************
-     * INITIALIZE MAP & RHQC Elements
+     * INITIALIZE MAP & RHQC ELEMENTS
      ***********************/
     function initMap() {
       map = L.map('map').setView([36.85, -87.55], 13);
@@ -270,11 +319,10 @@
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-      // Add zombie and loot layers to map.
       zombieLayer.addTo(map);
       lootLayer.addTo(map);
       
-      // Set up draw control for grid box (for potential road debugging)
+      // Draw control for grid box (for road debugging).
       drawnItems = new L.FeatureGroup();
       map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
@@ -298,7 +346,7 @@
         fetchAndDisplayRoads();
       });
       
-      // Allow teleportation and free movement via search bar.
+      // Teleportation via search bar.
       document.getElementById("searchBtn").addEventListener("click", function(){
         var address = document.getElementById("addressInput").value;
         if (!address) return;
@@ -309,7 +357,6 @@
             if (data.length > 0) {
               var lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
               map.setView([lat, lon], 18);
-              // Teleport player.
               spawnPlayerAt(lat, lon);
               saveState();
             } else {
@@ -318,7 +365,7 @@
           });
       });
       
-      // Allow free movement by clicking on map.
+      // Allow movement by clicking on the map.
       map.on('click', function(e) {
         if (!playerMarker) return;
         animatePlayerMove(e.latlng.lat, e.latlng.lng);
@@ -397,15 +444,105 @@
       var θ = toRad(bearing);
       var φ1 = toRad(lat);
       var λ1 = toRad(lon);
-      var φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
+                               Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
+    }
+    
+    /***********************
+     * FETCH ROADS WITH GEOMETRY (Overpass API)
+     ***********************/
+    var roadPolylines = [];
+    function fetchAndDisplayRoads() {
+      if (!gridBox) {
+        document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
+        return;
+      }
+      var bounds = gridBox.getBounds();
+      var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
+      var bbox = south + "," + west + "," + north + "," + east;
+      var query = `[out:json][timeout:25];
+        (
+          way["highway"](${bbox});
+        );
+        out geom;`;
+      fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: "data=" + encodeURIComponent(query)
+      })
+      .then(response => response.json())
+      .then(data => processRoadData(data.elements, bounds))
+      .catch(error => {
+        console.error("Error fetching roads:", error);
+        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
+      });
+    }
+    function processRoadData(elements, gridBounds) {
+      var roads = [];
+      roadPolylines = [];
+      elements.forEach(function(elem) {
+        if (elem.type === "way" && elem.tags && elem.tags.name && elem.geometry) {
+          var polyCoords = elem.geometry.map(pt => [pt.lat, pt.lon]);
+          roads.push({ name: elem.tags.name, polyline: polyCoords });
+          roadPolylines.push({ name: elem.tags.name, polyline: polyCoords });
+        }
+      });
+      var html = "";
+      roads.sort((a, b) => a.name.localeCompare(b.name));
+      roads.forEach(function(road) {
+        var mid = road.polyline[Math.floor(road.polyline.length/2)];
+        var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
+        html += "<div class='road-item'><span class='road-code'>" + code + "</span> " + road.name + "</div>";
+      });
+      document.getElementById("roadsContainer").innerHTML = html || "No roads found.";
+      applyRoadFilter();
+    }
+    document.getElementById("roadFilter").addEventListener("input", applyRoadFilter);
+    function applyRoadFilter() {
+      var filterText = document.getElementById("roadFilter").value.toLowerCase();
+      var roadItems = document.querySelectorAll("#roadsContainer .road-item");
+      roadItems.forEach(function(item) {
+        item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
+      });
+    }
+    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
+      document.getElementById("roadList").style.display = "none";
+      document.getElementById("roadListToggle").style.display = "block";
+    });
+    document.getElementById("roadListToggle").addEventListener("click", function(){
+      document.getElementById("roadList").style.display = "block";
+      document.getElementById("roadListToggle").style.display = "none";
+    });
+    
+    function getRHQCCode(lat, lng, bounds, maxLevel) {
+      var code = "";
+      var currentBounds = JSON.parse(JSON.stringify(bounds));
+      for (var level = 1; level <= maxLevel; level++) {
+        var south = currentBounds[0][0], west = currentBounds[0][1],
+            north = currentBounds[1][0], east = currentBounds[1][1];
+        var midLat = (south + north) / 2, midLng = (west + east) / 2;
+        if (lat >= midLat && lng <= midLng) {
+          code += "1";
+          currentBounds = [[midLat, west], [north, midLng]];
+        } else if (lat >= midLat && lng > midLng) {
+          code += "2";
+          currentBounds = [[midLat, midLng], [north, east]];
+        } else if (lat < midLat && lng <= midLng) {
+          code += "3";
+          currentBounds = [[south, west], [midLat, midLng]];
+        } else {
+          code += "4";
+          currentBounds = [[south, midLng], [midLat, east]];
+        }
+      }
+      return code;
     }
     
     /***********************
      * ZOMBIE SPAWNING & AI
      ***********************/
-    // Spawn zombies every 30s. They now spawn randomly between 100m and 200m from the player.
+    // Spawn zombies every 30s; they spawn randomly between 100m and 200m from the player.
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
@@ -419,7 +556,6 @@
       });
       var marker = L.marker([spawn.lat, spawn.lng], { icon: zombieIcon });
       marker.addTo(zombieLayer).bindPopup("Zombie!");
-      // Each zombie requires 3 shots to defeat.
       marker.shotsRemaining = 3;
       zombieMarkers.push({ marker: marker });
     }
@@ -430,7 +566,6 @@
                '<div class="zombie-boots"></div>' +
              '</div>';
     }
-    // Update zombie behavior every second.
     function updateZombies() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
@@ -438,25 +573,22 @@
         var zObj = zombieMarkers[i];
         var zombiePos = zObj.marker.getLatLng();
         var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
-        // Remove zombie if more than 1000 m from player.
         if (dist > 1000) {
           zombieLayer.removeLayer(zObj.marker);
           zombieMarkers.splice(i, 1);
           continue;
         }
         var target = null, speed = 0;
-        if (dist < 50) { // Lock on if within 50 m.
+        if (dist < 50) { 
           target = { lat: playerPos.lat, lng: playerPos.lng };
-          speed = 18; // chase speed
+          speed = 18;
         } else {
-          // Wander small random step (up to 5 m).
           var wanderDist = Math.random() * 5;
           var wanderAngle = Math.random() * 360;
           target = destinationPoint(zombiePos.lat, zombiePos.lng, wanderAngle, wanderDist);
-          speed = 10; // wander speed
+          speed = 10;
         }
         animateZombieMove(zObj.marker, target.lat, target.lng, speed);
-        // If zombie is within 5m, inflict 1 damage per second.
         if (dist < 5) {
           playerHealth -= 1;
           updateStatusDisplay();
@@ -484,26 +616,20 @@
       }
       requestAnimationFrame(animate);
     }
-    // Run zombie spawn every 30 seconds.
     setInterval(spawnZombie, 30000);
-    // Update zombie behavior every second.
     setInterval(updateZombies, 1000);
     
     /***********************
      * ZOMBIE COMBAT: SHOOTING ON CLICK
      ***********************/
-    // Allow player to click on a zombie marker to shoot it. Only if a gun is equipped.
     zombieLayer.on('click', function(e) {
       if (!equippedItem || equippedItem.type !== "gun") {
         alert("Equip a gun to shoot!");
         return;
       }
-      // Check if click target is a zombie marker.
       var clickedMarker = e.layer;
-      // Find the corresponding zombie object.
       for (var i = 0; i < zombieMarkers.length; i++) {
         if (zombieMarkers[i].marker === clickedMarker) {
-          // Check if within gun range.
           var playerPos = playerMarker.getLatLng();
           var zombiePos = clickedMarker.getLatLng();
           var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
@@ -511,18 +637,15 @@
             alert("Target out of range for " + equippedItem.name);
             return;
           }
-          // Check for ammo in backpack.
           var ammoIndex = backpack.findIndex(item => item.type === "ammo");
           if (ammoIndex < 0) {
             alert("No ammunition!");
             return;
           }
-          // Consume one ammo.
           backpack[ammoIndex].quantity--;
           if (backpack[ammoIndex].quantity <= 0) {
             backpack.splice(ammoIndex, 1);
           }
-          // Register a shot.
           clickedMarker.shotsRemaining--;
           if (clickedMarker.shotsRemaining <= 0) {
             zombieLayer.removeLayer(clickedMarker);
@@ -540,13 +663,10 @@
     /***********************
      * LOOT SYSTEM: BUILDINGS & LOOT BOXES
      ***********************/
-    // Fetch buildings within 500 m of the player and place loot boxes.
     function fetchBuildingsAndSpawnLoot() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
-      var radius = 500; // 500 m
-      // Build bounding box for Overpass.
-      var delta = 0.005; // rough conversion (~500m)
+      var delta = 0.005;
       var south = playerPos.lat - delta, north = playerPos.lat + delta;
       var west = playerPos.lng - delta, east = playerPos.lng + delta;
       var bbox = south + "," + west + "," + north + "," + east;
@@ -563,7 +683,6 @@
       .then(data => {
         data.elements.forEach(function(elem) {
           if (elem.center) {
-            // Spawn a loot box marker at building center.
             var lootIcon = L.divIcon({
               html: '<div class="loot-box">L</div>',
               iconSize: [10,10],
@@ -572,11 +691,10 @@
             var marker = L.marker([elem.center.lat, elem.center.lon], { icon: lootIcon });
             marker.addTo(lootLayer);
             marker.on('click', function() {
-              // On click, grant random loot.
               var loot = generateRandomLoot();
               backpack.push(loot);
               updateInventoryUI();
-              alert("You looted: " + loot.name + (loot.type==="ammo" ? " x" + loot.quantity : ""));
+              alert("You looted: " + loot.name + (loot.type === "ammo" ? " x" + loot.quantity : ""));
               lootLayer.removeLayer(marker);
               saveState();
             });
@@ -584,9 +702,7 @@
         });
       });
     }
-    // Generate random loot item.
     function generateRandomLoot() {
-      // Define possible loot with weights.
       var lootTable = [
         { chance: 0.3, item: { type:"ammo", name:"ammo", quantity: 10 } },
         { chance: 0.2, item: { type:"gun", name:"pistol", damage:1, range:100 } },
@@ -600,14 +716,11 @@
       for (var i = 0; i < lootTable.length; i++) {
         cumulative += lootTable[i].chance;
         if (rand < cumulative) {
-          // Clone the item.
           return JSON.parse(JSON.stringify(lootTable[i].item));
         }
       }
-      // Fallback
       return { type:"ammo", name:"ammo", quantity: 5 };
     }
-    // Fetch loot boxes every 30 seconds.
     setInterval(fetchBuildingsAndSpawnLoot, 30000);
     
     /***********************
@@ -620,16 +733,13 @@
     function updateInventoryUI() {
       var equippedDiv = document.getElementById("equipped");
       var backpackDiv = document.getElementById("backpack");
-      // Equipped item display:
       equippedDiv.innerHTML = equippedItem ? equippedItem.name : "None";
-      // Backpack display: show each item (max 20 boxes)
       backpackDiv.innerHTML = "";
       for (var i = 0; i < backpack.length; i++) {
         var item = backpack[i];
         var itemDiv = document.createElement("div");
         itemDiv.className = "inv-item";
-        itemDiv.textContent = item.name + (item.type==="ammo" ? " x" + item.quantity : "");
-        // On click, equip if a gun/gear, or consume if consumable.
+        itemDiv.textContent = item.name + (item.type === "ammo" ? " x" + item.quantity : "");
         itemDiv.onclick = function(idx) {
           return function() {
             var selected = backpack[idx];
@@ -637,12 +747,10 @@
               equippedItem = selected;
               alert("Equipped " + selected.name);
             } else if (selected.type === "consumable") {
-              // For consumables, heal player.
               if (selected.effect === "heal") {
                 playerHealth += selected.amount;
                 if (playerHealth > 100) playerHealth = 100;
                 alert("Consumed " + selected.name + ". Healed " + selected.amount);
-                // Remove the consumable from backpack.
                 backpack.splice(idx, 1);
               }
             }
@@ -653,7 +761,6 @@
         }(i);
         backpackDiv.appendChild(itemDiv);
       }
-      // Fill empty slots up to 20.
       while (backpackDiv.childNodes.length < 20) {
         var emptyDiv = document.createElement("div");
         emptyDiv.className = "inv-item";
@@ -664,29 +771,22 @@
     }
     
     /***********************
-     * PLAYER DAMAGE (from zombies)
-     ***********************/
-    // (Already integrated within updateZombies: player loses 1 health per second if zombie < 5 m)
-    
-    /***********************
-     * SAVE STATE WHEN UNLOADING
-     ***********************/
-    window.addEventListener("beforeunload", saveState);
-    
-    /***********************
      * GAME RESET
      ***********************/
     function resetGame() {
       alert("Game Over! Your score: " + playerScore);
-      // Clear state.
-      localStorage.removeItem('gridwalkers_' + currentUser);
+      var profiles = loadProfiles();
+      delete profiles[currentUser];
+      saveProfiles(profiles);
       location.reload();
     }
     
+    window.addEventListener("beforeunload", saveState);
+    
     /***********************
-     * INITIATE PERIODIC FUNCTIONS
+     * UPDATE LOOP
      ***********************/
-    // Update zombies and loot are already running via setInterval in earlier sections.
+    setInterval(updateZombies, 1000);
     
   </script>
 </body>

@@ -123,14 +123,17 @@
     // Utilities
     function toRad(d){ return d * Math.PI / 180; }
     function getDist(lat1, lon1, lat2, lon2){
-      const R = 6371000, dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+      const R = 6371000,
+            dLat = toRad(lat2 - lat1),
+            dLon = toRad(lon2 - lon1);
       const a = Math.sin(dLat/2)**2
-              + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))
+              + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2))
               * Math.sin(dLon/2)**2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
     function destination(lat,lon,br,dist){
-      const R=6371000, δ=dist/R, θ=toRad(br), φ1=toRad(lat), λ1=toRad(lon);
+      const R=6371000, δ=dist/R, θ=toRad(br),
+            φ1=toRad(lat), λ1=toRad(lon);
       const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)
                 + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
       const λ2=λ1+Math.atan2(
@@ -164,12 +167,13 @@
       });
     }
 
-    // Auth state listener
+    // Auth listener
     auth.onAuthStateChanged(user => {
       if(user){
         currentUser = user.uid;
+        console.log("Auth state:", user.email);
         document.getElementById("loginOverlay").style.display = "none";
-        if(!map) {
+        if(!map){
           startGame();
           loadStateFromFirebase(currentUser);
         }
@@ -183,17 +187,28 @@
       const email = document.getElementById("emailInput").value.trim();
       const pw    = document.getElementById("passwordInput").value;
       auth.createUserWithEmailAndPassword(email, pw)
-        .then(() => alert("Registration successful!"))
-        .catch(err => alert("Registration failed: " + err.message));
+        .then(cred => {
+          console.log("Registered:", cred.user.email);
+          alert("Registration successful!");
+        })
+        .catch(err => {
+          console.error("Registration error:", err);
+          alert("Registration failed: " + err.message);
+        });
     };
 
     // Login
     document.getElementById("loginBtn").onclick = () => {
       const email = document.getElementById("emailInput").value.trim();
-      const pw    = document.getElementById("
-      passwordInput").value;
+      const pw    = document.getElementById("passwordInput").value;
       auth.signInWithEmailAndPassword(email, pw)
-        .catch(err => alert("Login failed: " + err.message));
+        .then(cred => {
+          console.log("Logged in:", cred.user.email);
+        })
+        .catch(err => {
+          console.error("Login error:", err);
+          alert("Login failed: " + err.message);
+        });
     };
 
     // Start Game
@@ -209,7 +224,7 @@
       });
     }
 
-    // Map & Controls
+    // Initialize Map & Controls
     function initMap(){
       map = L.map("map").setView([36.85, -87.55], 13);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ maxZoom:19 }).addTo(map);
@@ -259,7 +274,7 @@
       };
     }
 
-    // Player
+    // Player & Movement
     function createPlayerIcon(){
       return L.divIcon({ html:
         '<div class="player-sprite">'+
@@ -285,7 +300,7 @@
       moveIndicator = L.circle(playerMarker.getLatLng(),{ radius:50, className:"move-radius" }).addTo(map);
     }
 
-    // Roads & RHQC
+    // Roads via Overpass & RHQC
     function loadRoads(){
       if(!gridBox) return;
       const b  = gridBox.getBounds();

@@ -8,15 +8,15 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
-    /* Basic reset */
+    /* Basic reset and fonts */
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-    #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 220px; }
+    #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 60px; }
     
     /* Top Control Bar (for search) */
     #searchBar {
       position: absolute;
       top: 5px;
-      left: 230px; /* shifted right to leave space for left panel */
+      left: 70px;
       z-index: 2000;
       background: rgba(255,255,255,0.9);
       padding: 6px;
@@ -27,38 +27,7 @@
       font-size: 12px;
     }
     
-    /* Left Panel for Inventory & Equipped Items */
-    #leftPanel {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 220px;
-      bottom: 0;
-      background: #eee;
-      border-right: 1px solid #ccc;
-      padding: 10px;
-      overflow-y: auto;
-      z-index: 2000;
-    }
-    #leftPanel h3 { margin: 10px 0 5px; }
-    #equipped, #backpack {
-      border: 1px solid #ccc;
-      background: #fff;
-      padding: 5px;
-      min-height: 60px;
-      margin-bottom: 15px;
-    }
-    /* Each inventory item display */
-    .inv-item {
-      border: 1px solid #bbb;
-      background: #ddd;
-      margin: 2px;
-      padding: 2px;
-      font-size: 10px;
-      cursor: pointer;
-      text-align: center;
-    }
-    /* Score & health display */
+    /* Status Display (top-right) */
     #statusDisplay {
       position: absolute;
       top: 5px;
@@ -70,13 +39,89 @@
       font-size: 12px;
     }
     
+    /* Collapsible Left Sidebar for Inventory Icons */
+    #leftSidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 60px;
+      height: 100%;
+      background: #444;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 10px;
+    }
+    .inv-icon {
+      width: 40px;
+      height: 40px;
+      margin: 10px 0;
+      background: #888;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 10px;
+      line-height: 40px;
+      text-align: center;
+      cursor: pointer;
+    }
+    
+    /* Inventory Modal Overlay (hidden by default) */
+    .inventory-modal {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -20%);
+      background: #fff;
+      border: 2px solid #333;
+      padding: 10px;
+      z-index: 3000;
+      max-width: 300px;
+      display: none;
+    }
+    .inventory-modal h3 {
+      margin-top: 0;
+      font-size: 14px;
+      text-align: center;
+    }
+    .inventory-modal .close-btn {
+      display: block;
+      text-align: right;
+      font-size: 12px;
+      cursor: pointer;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    /* Inventory contents inside modal */
+    #equippedModal, #backpackModal {
+      border: 1px solid #ccc;
+      background: #fafafa;
+      padding: 5px;
+      min-height: 60px;
+      margin-bottom: 10px;
+    }
+    .inv-item {
+      border: 1px solid #bbb;
+      background: #ddd;
+      margin: 2px;
+      padding: 2px;
+      font-size: 10px;
+      cursor: pointer;
+      text-align: center;
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      vertical-align: top;
+    }
+    
     /* Login overlay */
     #loginOverlay {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
       background: rgba(0,0,0,0.7);
-      z-index: 3000;
+      z-index: 4000;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -97,8 +142,6 @@
     }
     #loginOverlay input { margin: 5px; padding: 5px; }
     #loginOverlay button { margin: 5px; padding: 5px 10px; }
-    
-    /* Load Google Font for 8-bit look (optional) */
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     
     /* Player Sprite: 3 stacked squares (head, torso, boots) */
@@ -161,12 +204,24 @@
     </form>
   </div>
   
-  <!-- Left Panel: Inventory & Equipped Items -->
-  <div id="leftPanel">
-    <h3>Equipped</h3>
-    <div id="equipped">None</div>
+  <!-- Left Sidebar for Inventory Icons -->
+  <div id="leftSidebar">
+    <div id="equippedIcon" class="inv-icon" title="Equipped">EQ</div>
+    <div id="backpackIcon" class="inv-icon" title="Backpack">BP</div>
+  </div>
+  
+  <!-- Inventory Modal for Equipped -->
+  <div id="equippedModal" class="inventory-modal">
+    <div class="close-btn" onclick="toggleModal('equippedModal')">[X]</div>
+    <h3>Equipped Item</h3>
+    <div id="equippedContent" style="border:1px solid #ccc; background:#fafafa; padding:5px; min-height:60px;">None</div>
+  </div>
+  
+  <!-- Inventory Modal for Backpack -->
+  <div id="backpackModal" class="inventory-modal">
+    <div class="close-btn" onclick="toggleModal('backpackModal')">[X]</div>
     <h3>Backpack</h3>
-    <div id="backpack"></div>
+    <div id="backpackContent" style="border:1px solid #ccc; background:#fafafa; padding:5px; min-height:120px;"></div>
   </div>
   
   <!-- Top Search Bar -->
@@ -219,7 +274,7 @@
     // Map & RHQC elements.
     var map, drawnItems, gridBox, roadPolylines = [];
     
-    // Profiles storage: profiles saved under localStorage key "gridwalkers_profiles" as an object.
+    // Profiles storage: stored under localStorage key "gridwalkers_profiles"
     function loadProfiles() {
       var profiles = localStorage.getItem("gridwalkers_profiles");
       return profiles ? JSON.parse(profiles) : {};
@@ -227,7 +282,6 @@
     function saveProfiles(profiles) {
       localStorage.setItem("gridwalkers_profiles", JSON.stringify(profiles));
     }
-    
     var currentUser = null;
     
     /***********************
@@ -245,7 +299,6 @@
         alert("Username already exists. Please choose a different username.");
         return;
       }
-      // Create new profile with default state.
       profiles[username] = {
         password: password,
         state: {
@@ -259,7 +312,6 @@
       saveProfiles(profiles);
       alert("Registration successful! You can now log in.");
     });
-    
     document.getElementById("loginBtn").addEventListener("click", function() {
       var username = document.getElementById("usernameInput").value.trim();
       var password = document.getElementById("passwordInput").value;
@@ -277,7 +329,6 @@
         return;
       }
       currentUser = username;
-      // Load state.
       var state = profiles[username].state;
       playerHealth = state.health;
       playerScore = state.score;
@@ -293,10 +344,6 @@
         map.setView([spawnPoint.lat, spawnPoint.lon], 18);
       }
     });
-    
-    /***********************
-     * SAVE CURRENT USER STATE
-     ***********************/
     function saveState() {
       if (!currentUser) return;
       var profiles = loadProfiles();
@@ -311,7 +358,66 @@
     }
     
     /***********************
-     * INITIALIZE MAP & RHQC ELEMENTS
+     * LEFT PANEL MODAL TOGGLING
+     ***********************/
+    function toggleModal(modalId) {
+      var modal = document.getElementById(modalId);
+      if (modal.style.display === "none" || modal.style.display === "") {
+        modal.style.display = "block";
+      } else {
+        modal.style.display = "none";
+      }
+    }
+    document.getElementById("equippedIcon").addEventListener("click", function() {
+      toggleModal("equippedModal");
+      updateEquippedModal();
+    });
+    document.getElementById("backpackIcon").addEventListener("click", function() {
+      toggleModal("backpackModal");
+      updateBackpackModal();
+    });
+    function updateEquippedModal() {
+      document.getElementById("equippedContent").textContent = equippedItem ? equippedItem.name : "None";
+    }
+    function updateBackpackModal() {
+      var backpackContent = document.getElementById("backpackContent");
+      backpackContent.innerHTML = "";
+      backpack.forEach(function(item, idx) {
+        var itemDiv = document.createElement("div");
+        itemDiv.className = "inv-item";
+        itemDiv.textContent = item.name + (item.type==="ammo" ? " x" + item.quantity : "");
+        itemDiv.onclick = function() {
+          if (item.type === "gun") {
+            equippedItem = item;
+            alert("Equipped " + item.name);
+          } else if (item.type === "consumable") {
+            if (item.effect === "heal") {
+              playerHealth += item.amount;
+              if (playerHealth > 100) playerHealth = 100;
+              alert("Consumed " + item.name + ". Healed " + item.amount);
+              backpack.splice(idx, 1);
+            }
+          }
+          updateInventoryUI();
+          updateStatusDisplay();
+          saveState();
+          updateBackpackModal();
+          updateEquippedModal();
+        };
+        backpackContent.appendChild(itemDiv);
+      });
+      // Fill empty slots up to 20.
+      while (backpackContent.childNodes.length < 20) {
+        var emptyDiv = document.createElement("div");
+        emptyDiv.className = "inv-item";
+        emptyDiv.style.background = "#fff";
+        emptyDiv.textContent = "";
+        backpackContent.appendChild(emptyDiv);
+      }
+    }
+    
+    /***********************
+     * INIT MAP & RHQC ELEMENTS
      ***********************/
     function initMap() {
       map = L.map('map').setView([36.85, -87.55], 13);
@@ -322,7 +428,6 @@
       zombieLayer.addTo(map);
       lootLayer.addTo(map);
       
-      // Draw control for grid box (for road debugging).
       drawnItems = new L.FeatureGroup();
       map.addLayer(drawnItems);
       var drawControl = new L.Control.Draw({
@@ -346,7 +451,6 @@
         fetchAndDisplayRoads();
       });
       
-      // Teleportation via search bar.
       document.getElementById("searchBtn").addEventListener("click", function(){
         var address = document.getElementById("addressInput").value;
         if (!address) return;
@@ -365,7 +469,6 @@
           });
       });
       
-      // Allow movement by clicking on the map.
       map.on('click', function(e) {
         if (!playerMarker) return;
         animatePlayerMove(e.latlng.lat, e.latlng.lng);
@@ -407,7 +510,7 @@
     function animatePlayerMove(targetLat, targetLng) {
       var startPos = playerMarker.getLatLng();
       var totalDistance = getDistanceMeters(startPos.lat, startPos.lng, targetLat, targetLng);
-      var speed = 20; // m/s
+      var speed = 20;
       var duration = Math.max((totalDistance / speed) * 1000, 500);
       var startTime = null;
       function animate(timestamp) {
@@ -445,15 +548,13 @@
       var φ1 = toRad(lat);
       var λ1 = toRad(lon);
       var φ2 = Math.asin(Math.sin(φ1)*Math.cos(δ) + Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
-      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
-                               Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1), Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
       return { lat: toDeg(φ2), lng: toDeg(λ2) };
     }
     
     /***********************
      * FETCH ROADS WITH GEOMETRY (Overpass API)
      ***********************/
-    var roadPolylines = [];
     function fetchAndDisplayRoads() {
       if (!gridBox) {
         document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
@@ -514,7 +615,6 @@
       document.getElementById("roadList").style.display = "block";
       document.getElementById("roadListToggle").style.display = "none";
     });
-    
     function getRHQCCode(lat, lng, bounds, maxLevel) {
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
@@ -542,11 +642,11 @@
     /***********************
      * ZOMBIE SPAWNING & AI
      ***********************/
-    // Spawn zombies every 30s; they spawn randomly between 100m and 200m from the player.
+    // Zombies spawn every 30 seconds at a random distance of 100-200m from the player.
     function spawnZombie() {
       if (!playerMarker) return;
       var playerPos = playerMarker.getLatLng();
-      var distance = 100 + Math.random() * 100; // 100-200 m away
+      var distance = 100 + Math.random() * 100;
       var angle = Math.random() * 360;
       var spawn = destinationPoint(playerPos.lat, playerPos.lng, angle, distance);
       var zombieIcon = L.divIcon({
@@ -573,13 +673,14 @@
         var zObj = zombieMarkers[i];
         var zombiePos = zObj.marker.getLatLng();
         var dist = getDistanceMeters(playerPos.lat, playerPos.lng, zombiePos.lat, zombiePos.lng);
+        // Remove zombie if more than 1000m from player.
         if (dist > 1000) {
           zombieLayer.removeLayer(zObj.marker);
           zombieMarkers.splice(i, 1);
           continue;
         }
         var target = null, speed = 0;
-        if (dist < 50) { 
+        if (dist < 50) { // Lock on when within 50m.
           target = { lat: playerPos.lat, lng: playerPos.lng };
           speed = 18;
         } else {
@@ -589,6 +690,7 @@
           speed = 10;
         }
         animateZombieMove(zObj.marker, target.lat, target.lng, speed);
+        // If zombie is within 5m, inflict 1 damage per second.
         if (dist < 5) {
           playerHealth -= 1;
           updateStatusDisplay();
@@ -731,43 +833,13 @@
       document.getElementById("scoreDisplay").textContent = playerScore;
     }
     function updateInventoryUI() {
-      var equippedDiv = document.getElementById("equipped");
-      var backpackDiv = document.getElementById("backpack");
-      equippedDiv.innerHTML = equippedItem ? equippedItem.name : "None";
-      backpackDiv.innerHTML = "";
-      for (var i = 0; i < backpack.length; i++) {
-        var item = backpack[i];
-        var itemDiv = document.createElement("div");
-        itemDiv.className = "inv-item";
-        itemDiv.textContent = item.name + (item.type === "ammo" ? " x" + item.quantity : "");
-        itemDiv.onclick = function(idx) {
-          return function() {
-            var selected = backpack[idx];
-            if (selected.type === "gun") {
-              equippedItem = selected;
-              alert("Equipped " + selected.name);
-            } else if (selected.type === "consumable") {
-              if (selected.effect === "heal") {
-                playerHealth += selected.amount;
-                if (playerHealth > 100) playerHealth = 100;
-                alert("Consumed " + selected.name + ". Healed " + selected.amount);
-                backpack.splice(idx, 1);
-              }
-            }
-            updateInventoryUI();
-            updateStatusDisplay();
-            saveState();
-          }
-        }(i);
-        backpackDiv.appendChild(itemDiv);
-      }
-      while (backpackDiv.childNodes.length < 20) {
-        var emptyDiv = document.createElement("div");
-        emptyDiv.className = "inv-item";
-        emptyDiv.style.background = "#fff";
-        emptyDiv.textContent = "";
-        backpackDiv.appendChild(emptyDiv);
-      }
+      // Update icons with a label badge showing counts if desired.
+      // For modal content, updateEquippedModal() and updateBackpackModal() are called on modal open.
+      // Here we update the small icon labels.
+      var equippedIcon = document.getElementById("equippedIcon");
+      equippedIcon.textContent = equippedItem ? equippedItem.name.substring(0,2).toUpperCase() : "EQ";
+      var backpackIcon = document.getElementById("backpackIcon");
+      backpackIcon.textContent = backpack.length;
     }
     
     /***********************
@@ -780,7 +852,6 @@
       saveProfiles(profiles);
       location.reload();
     }
-    
     window.addEventListener("beforeunload", saveState);
     
     /***********************

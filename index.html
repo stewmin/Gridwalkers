@@ -4,12 +4,14 @@
   <title>Gridwalkers – Spawn & Move</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet and Draw CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
   <style>
     body { margin: 0; padding: 0; }
     #map { position: absolute; top: 60px; bottom: 0; right: 0; left: 0; }
 
+    /* Top Control Bar */
     #searchBar {
       position: absolute;
       top: 5px;
@@ -25,6 +27,7 @@
       font-size: 12px;
     }
 
+    /* Road List Panel */
     #roadList {
       position: absolute;
       top: 60px;
@@ -62,7 +65,6 @@
       padding: 2px 4px;
       border-radius: 3px;
     }
-
     #roadListToggle {
       position: absolute;
       top: 60px;
@@ -77,22 +79,40 @@
       font-size: 14px;
     }
 
+    /* Player Sprite: 3 stacked squares (head, shirt, boots) */
     .player-sprite {
-      width: 16px;
-      height: 16px;
-      background: url('https://i.imgur.com/U7z6zLZ.png') no-repeat center center;
-      background-size: contain;
+      display: inline-block;
+    }
+    .player-sprite > div {
+      width: 6px;
+      height: 6px;
+      margin: 0;
+      padding: 0;
+      line-height: 6px;
+    }
+    .player-head { background: #f1c27d; } /* flesh tone */
+    .player-torso { background: blue; }
+    .player-boots { background: black; }
+    
+    /* Movement Radius Indicator (50 m) */
+    .move-radius {
+      fill: rgba(0, 0, 255, 0.1);
+      stroke: blue;
+      stroke-width: 1;
     }
   </style>
 </head>
 <body>
+  <!-- Top Control Bar: Search to spawn the player -->
   <div id="searchBar">
     <input type="text" id="addressInput" placeholder="Enter your address" size="20" />
     <button id="searchBtn">Search</button>
   </div>
 
+  <!-- Map Container -->
   <div id="map"></div>
 
+  <!-- Road List Panel (for debug/display purposes) -->
   <div id="roadList">
     <h3>
       Road List
@@ -103,15 +123,20 @@
   </div>
   <div id="roadListToggle">Show Road List</div>
 
+  <!-- Leaflet JS and Draw Plugin -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <script>
+    /***********************
+     * INITIAL SETUP
+     ***********************/
     var map = L.map('map').setView([36.85, -87.55], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    // Feature group and draw control for grid box (RHQC functionality)
     var drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
     var drawControl = new L.Control.Draw({
@@ -137,21 +162,52 @@
       fetchAndDisplayRoads();
     });
 
-    /********* Player Spawn *********/
+    /***********************
+     * PLAYER SPAWN AND ICON
+     ***********************/
     var playerMarker = null;
     var spawnPoint = null;
+    var moveRadius = 50; // allowed movement distance in meters
+    var moveIndicator = null; // circle to visualize movement radius
+
+    // Create a custom HTML for player: 3 stacked squares
+    function createPlayerHTML() {
+      return '<div class="player-sprite">' +
+                '<div class="player-head"></div>' +
+                '<div class="player-torso"></div>' +
+                '<div class="player-boots"></div>' +
+             '</div>';
+    }
 
     function spawnPlayerAt(lat, lon) {
-      if (playerMarker) map.removeLayer(playerMarker);
+      if (playerMarker) { 
+        map.removeLayer(playerMarker); 
+      }
       playerMarker = L.marker([lat, lon], {
         icon: L.divIcon({
-          className: 'player-sprite',
-          iconSize: [16, 16]
+          className: '',
+          html: createPlayerHTML(),
+          iconSize: [6, 18]
         })
       }).addTo(map).bindPopup("You").openPopup();
       spawnPoint = { lat: lat, lon: lon };
+      updateMoveIndicator();
     }
 
+    // Draw or update a circle around the player showing move radius.
+    function updateMoveIndicator() {
+      if (moveIndicator) map.removeLayer(moveIndicator);
+      if (!playerMarker) return;
+      var pos = playerMarker.getLatLng();
+      moveIndicator = L.circle(pos, {
+        radius: moveRadius,
+        className: 'move-radius'
+      }).addTo(map);
+    }
+
+    /***********************
+     * ADDRESS SEARCH FOR SPAWN
+     ***********************/
     document.getElementById("searchBtn").addEventListener("click", function(){
       var address = document.getElementById("addressInput").value;
       if (!address) return;
@@ -169,14 +225,173 @@
         });
     });
 
-    /********* RHQC Logic *********/
+    /***********************
+     * FETCH ROADS WITH GEOMETRY (Overpass API)
+     ***********************/
+    var roadPolylines = []; // Array to store road polyline objects
+    function fetchAndDisplayRoads() {
+      if (!gridBox) {
+        document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
+        return;
+      }
+      var bounds = gridBox.getBounds();
+      var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
+      var bbox = south + "," + west + "," + north + "," + east;
+      // Query: get all highways with full geometry
+      var query = `[out:json][timeout:25];
+        (
+          way["highway"](${bbox});
+        );
+        out geom;`;
+      fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: "data=" + encodeURIComponent(query)
+      })
+      .then(response => response.json())
+      .then(data => processRoadData(data.elements, bounds))
+      .catch(error => {
+        console.error("Error fetching roads:", error);
+        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
+      });
+    }
+
+    function processRoadData(elements, gridBounds) {
+      var roads = [];
+      roadPolylines = []; // reset
+      elements.forEach(function(elem) {
+        if (elem.type === "way" && elem.tags && elem.tags.name && elem.geometry) {
+          var polyCoords = elem.geometry.map(pt => [pt.lat, pt.lon]);
+          roads.push({ name: elem.tags.name, polyline: polyCoords });
+          roadPolylines.push({ name: elem.tags.name, polyline: polyCoords });
+        }
+      });
+      // (For debugging/display, list roads by name and their RHQC code.)
+      var html = "";
+      roads.sort((a, b) => a.name.localeCompare(b.name));
+      roads.forEach(function(road) {
+        // Compute an approximate center for display purposes:
+        var mid = road.polyline[Math.floor(road.polyline.length/2)];
+        var code = getRHQCCode(mid[0], mid[1], [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
+        html += "<div class='road-item'><span class='road-code'>" + code + "</span> " + road.name + "</div>";
+      });
+      document.getElementById("roadsContainer").innerHTML = html || "No roads found.";
+      applyRoadFilter();
+    }
+
+    document.getElementById("roadFilter").addEventListener("input", applyRoadFilter);
+    function applyRoadFilter() {
+      var filterText = document.getElementById("roadFilter").value.toLowerCase();
+      var roadItems = document.querySelectorAll("#roadsContainer .road-item");
+      roadItems.forEach(function(item) {
+        item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
+      });
+    }
+    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
+      document.getElementById("roadList").style.display = "none";
+      document.getElementById("roadListToggle").style.display = "block";
+    });
+    document.getElementById("roadListToggle").addEventListener("click", function(){
+      document.getElementById("roadList").style.display = "block";
+      document.getElementById("roadListToggle").style.display = "none";
+    });
+
+    /***********************
+     * HELPER FUNCTIONS (Distance, Bearing, Closest Point)
+     ***********************/
+    function toRad(value) { return value * Math.PI / 180; }
+    function toDeg(rad) { return rad * 180 / Math.PI; }
+
+    // Haversine distance in meters
+    function getDistanceMeters(lat1, lon1, lat2, lon2) {
+      var R = 6371000; // meters
+      var dLat = toRad(lat2 - lat1);
+      var dLon = toRad(lon2 - lon1);
+      var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // Compute the projection of point p onto segment (p1, p2)
+    // p, p1, p2: objects with lat and lng
+    function getClosestPointOnSegment(p, p1, p2) {
+      // Convert lat/lon to Cartesian coordinates (approximation for small distances)
+      function latLonToXY(lat, lon) {
+        var R = 6371000; // meters
+        var x = R * toRad(lon) * Math.cos(toRad(lat));
+        var y = R * toRad(lat);
+        return { x, y };
+      }
+      var P = latLonToXY(p.lat, p.lng);
+      var A = latLonToXY(p1.lat, p1.lng);
+      var B = latLonToXY(p2.lat, p2.lng);
+      var AB = { x: B.x - A.x, y: B.y - A.y };
+      var AP = { x: P.x - A.x, y: P.y - A.y };
+      var ab2 = AB.x*AB.x + AB.y*AB.y;
+      var t = (AP.x*AB.x + AP.y*AB.y) / ab2;
+      t = Math.max(0, Math.min(1, t));
+      var closest = { 
+        x: A.x + AB.x * t, 
+        y: A.y + AB.y * t 
+      };
+      // Convert back to lat/lon approximatively
+      var deltaX = closest.x - A.x, deltaY = closest.y - A.y;
+      var dLon = toDeg(deltaX / (6371000 * Math.cos(toRad(p1.lat))));
+      var dLat = toDeg(deltaY / 6371000);
+      return { lat: p1.lat + dLat, lng: p1.lng + dLon };
+    }
+
+    // For a polyline (array of [lat, lon] arrays) and point (object with lat,lng),
+    // return the closest point on the polyline and the distance in meters.
+    function getClosestPointOnPolyline(polyline, point) {
+      var minDist = Infinity;
+      var closestPoint = null;
+      for (var i = 0; i < polyline.length - 1; i++) {
+        var p1 = { lat: polyline[i][0], lng: polyline[i][1] };
+        var p2 = { lat: polyline[i+1][0], lng: polyline[i+1][1] };
+        var candidate = getClosestPointOnSegment(point, p1, p2);
+        var dist = getDistanceMeters(point.lat, point.lng, candidate.lat, candidate.lng);
+        if (dist < minDist) {
+          minDist = dist;
+          closestPoint = candidate;
+        }
+      }
+      return { point: closestPoint, distance: minDist };
+    }
+
+    // Compute bearing (in degrees) from point A to point B
+    function getBearing(lat1, lon1, lat2, lon2) {
+      var dLon = toRad(lon2 - lon1);
+      var y = Math.sin(dLon) * Math.cos(toRad(lat2));
+      var x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+              Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+      var brng = Math.atan2(y, x);
+      return (toDeg(brng) + 360) % 360;
+    }
+
+    // Given starting point, bearing, and distance (in meters), compute destination point.
+    function destinationPoint(lat, lon, bearing, distance) {
+      var R = 6371000; // radius in meters
+      var δ = distance / R;
+      var θ = toRad(bearing);
+      var φ1 = toRad(lat);
+      var λ1 = toRad(lon);
+      var φ2 = Math.asin( Math.sin(φ1)*Math.cos(δ) +
+                          Math.cos(φ1)*Math.sin(δ)*Math.cos(θ) );
+      var λ2 = λ1 + Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
+                               Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+      return { lat: toDeg(φ2), lng: toDeg(λ2) };
+    }
+
+    // RHQC Code calculation remains the same.
     function getRHQCCode(lat, lng, bounds, maxLevel) {
       var code = "";
       var currentBounds = JSON.parse(JSON.stringify(bounds));
       for (var level = 1; level <= maxLevel; level++) {
         var south = currentBounds[0][0], west = currentBounds[0][1],
             north = currentBounds[1][0], east = currentBounds[1][1];
-        var midLat = (south+north)/2, midLng = (west+east)/2;
+        var midLat = (south + north) / 2, midLng = (west + east) / 2;
         if (lat >= midLat && lng <= midLng) {
           code += "1";
           currentBounds = [[midLat, west], [north, midLng]];
@@ -194,69 +409,55 @@
       return code;
     }
 
-    function fetchAndDisplayRoads() {
-      if (!gridBox) {
-        document.getElementById("roadsContainer").innerHTML = "No grid box defined.";
-        return;
-      }
-      var bounds = gridBox.getBounds();
-      var south = bounds.getSouth(), west = bounds.getWest(), north = bounds.getNorth(), east = bounds.getEast();
-      var bbox = south + "," + west + "," + north + "," + east;
-      var query = `[out:json][timeout:25];
-        (
-          way["highway"](${bbox});
-        );
-        out center;`;
-      fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: "data=" + encodeURIComponent(query)
-      })
-      .then(response => response.json())
-      .then(data => processRoadData(data.elements, bounds))
-      .catch(error => {
-        console.error("Error fetching roads:", error);
-        document.getElementById("roadsContainer").innerHTML = "Error loading roads.";
-      });
-    }
-
-    function processRoadData(elements, gridBounds) {
-      var roads = [];
-      elements.forEach(function(elem) {
-        if (elem.type === "way" && elem.tags && elem.tags.name && elem.center) {
-          roads.push({ name: elem.tags.name, lat: elem.center.lat, lon: elem.center.lon });
+    /***********************
+     * CLICK-TO-MOVE (Player Movement)
+     ***********************/
+    map.on('click', function(e) {
+      // Only proceed if playerMarker exists (i.e. player spawned)
+      if (!playerMarker) return;
+      // Get the clicked point
+      var clickLatLng = e.latlng;
+      // Create a point object for helper functions
+      var clickPoint = { lat: clickLatLng.lat, lng: clickLatLng.lng };
+      var nearest = { distance: Infinity, snapped: null };
+      // Loop through all road polylines to find the nearest point along any road
+      roadPolylines.forEach(function(road) {
+        var result = getClosestPointOnPolyline(road.polyline, clickPoint);
+        if (result.distance < nearest.distance) {
+          nearest.distance = result.distance;
+          nearest.snapped = result.point;
         }
       });
-      var uniqueRoads = {};
-      roads.forEach(road => uniqueRoads[road.name] = road);
-      roads = Object.values(uniqueRoads).sort((a, b) => a.name.localeCompare(b.name));
-      var html = "";
-      roads.forEach(road => {
-        var code = getRHQCCode(road.lat, road.lon, [[gridBounds.getSouth(), gridBounds.getWest()], [gridBounds.getNorth(), gridBounds.getEast()]], 5);
-        html += "<div class='road-item'>" +
-                "<span class='road-code'>" + code + "</span> " + road.name +
-                "</div>";
-      });
-      document.getElementById("roadsContainer").innerHTML = html || "No roads found.";
-      applyRoadFilter();
-    }
-
-    document.getElementById("roadFilter").addEventListener("input", applyRoadFilter);
-    function applyRoadFilter() {
-      var filterText = document.getElementById("roadFilter").value.toLowerCase();
-      var roadItems = document.querySelectorAll("#roadsContainer .road-item");
-      roadItems.forEach(function(item) {
-        item.style.display = item.textContent.toLowerCase().includes(filterText) ? "" : "none";
-      });
-    }
-
-    document.getElementById("toggleRoadListBtn").addEventListener("click", function(){
-      document.getElementById("roadList").style.display = "none";
-      document.getElementById("roadListToggle").style.display = "block";
+      var tolerance = 10; // tolerance in meters to consider tap "on a road"
+      if (!nearest.snapped || nearest.distance > tolerance) {
+        // Click not close enough to any road.
+        console.log("No road within tolerance (" + nearest.distance.toFixed(1) + " m).");
+        return;
+      }
+      // Now, determine move step from current player location.
+      var currentPos = playerMarker.getLatLng();
+      var currentPoint = { lat: currentPos.lat, lng: currentPos.lng };
+      var moveDist = getDistanceMeters(currentPoint.lat, currentPoint.lng, nearest.snapped.lat, nearest.snapped.lng);
+      var destination = null;
+      if (moveDist <= moveRadius) {
+        destination = nearest.snapped;
+      } else {
+        // Move only moveRadius (50 m) toward the snapped point.
+        var bearing = getBearing(currentPoint.lat, currentPoint.lng, nearest.snapped.lat, nearest.snapped.lng);
+        destination = destinationPoint(currentPoint.lat, currentPoint.lng, bearing, moveRadius);
+        // Optionally, snap destination back onto the road if within tolerance:
+        var snapResult = getClosestPointOnPolyline(roadPolylines[0].polyline, destination);
+        if (snapResult.distance < tolerance) {
+          destination = snapResult.point;
+        }
+      }
+      // Move the player marker (for now, instantly; later, you can animate this change)
+      spawnPlayerAt(destination.lat, destination.lng);
+      map.panTo([destination.lat, destination.lng]);
     });
-    document.getElementById("roadListToggle").addEventListener("click", function(){
-      document.getElementById("roadList").style.display = "block";
-      document.getElementById("roadListToggle").style.display = "none";
-    });
+
+    // Update the movement circle when map view changes (if needed)
+    map.on('moveend', updateMoveIndicator);
   </script>
 </body>
 </html>
